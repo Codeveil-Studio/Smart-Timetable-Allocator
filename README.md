@@ -1,4 +1,66 @@
-# Welcome to your Lovable project
+# Smart Schedule Hub
+
+A modern, React + TypeScript application for university timetable management and scheduling.
+
+## Tech Stack
+- React 18, TypeScript
+- Vite 5 (fast dev, optimized build)
+- Tailwind CSS + shadcn/ui (Radix primitives)
+- React Router, TanStack Query
+- Recharts, Lucide Icons
+
+## Prerequisites
+- Node.js 18 or newer
+- npm (comes with Node.js)
+
+## Getting Started
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Start the development server:
+   ```bash
+   npm run dev
+   ```
+   The app runs on `http://localhost:8080/` (if occupied, Vite picks another port).
+3. Open the app in your browser and start building.
+
+## Available Scripts
+- `npm run dev` – start local dev server
+- `npm run build` – create production build in `dist/`
+- `npm run preview` – preview the production build locally
+- `npm run lint` – run ESLint across the project
+
+## Configuration
+- Dev server port and host are configured in `vite.config.ts`.
+- Path alias `@` maps to `src/` for cleaner imports.
+
+## Project Structure
+```
+smart-schedule-hub/
+├─ src/
+│  ├─ components/        # UI components (shadcn/ui + custom)
+│  ├─ pages/             # Route pages
+│  ├─ lib/               # Utilities
+│  ├─ main.tsx           # App entry
+│  └─ index.css          # Tailwind styles and CSS variables
+├─ index.html            # Vite HTML entry
+├─ vite.config.ts        # Vite config (server, aliases, plugins)
+├─ tailwind.config.ts    # Tailwind configuration
+├─ package.json          # Scripts and dependencies
+└─ README.md
+```
+
+## Build & Preview
+```bash
+npm run build
+npm run preview
+```
+Then open the printed local URL.
+
+## Notes
+- Theming uses `next-themes` with Tailwind CSS variables.
+- UI components are built with shadcn/ui and Radix for accessibility and composability.
 
 ## Project info
 
