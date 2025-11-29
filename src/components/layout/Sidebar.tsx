@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { title: "Dashboard", path: "/", icon: LayoutGrid },
-  { title: "Generate Timetable", path: "/generate", icon: Calendar },
+  { title: "Set Availibility", path: "/generate", icon: Calendar },
+  { title: "Generate Timetable", path: "/generate-timetable", icon: Calendar },
   { title: "View Timetable", path: "/view", icon: Table },
 ];
 

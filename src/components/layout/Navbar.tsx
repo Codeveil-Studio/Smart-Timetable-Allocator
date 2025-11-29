@@ -8,6 +8,8 @@ const getPageTitle = (pathname: string) => {
     case "/":
       return "Dashboard";
     case "/generate":
+      return "Set Availibility";
+    case "/generate-timetable":
       return "Generate Timetable";
     case "/view":
       return "View Timetable";
@@ -18,7 +20,8 @@ const getPageTitle = (pathname: string) => {
 
 const navItems = [
   { title: "Dashboard", path: "/", icon: LayoutGrid },
-  { title: "Generate Timetable", path: "/generate", icon: Calendar },
+  { title: "Set Availibility", path: "/generate", icon: Calendar },
+  { title: "Generate Timetable", path: "/generate-timetable", icon: Calendar },
   { title: "View Timetable", path: "/view", icon: Table },
 ];
 

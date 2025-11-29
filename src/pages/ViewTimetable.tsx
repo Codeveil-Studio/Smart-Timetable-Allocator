@@ -36,9 +36,9 @@ const ViewTimetable = () => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cs">Computer Science</SelectItem>
-                <SelectItem value="ee">Electrical Engineering</SelectItem>
-                <SelectItem value="me">Mechanical Engineering</SelectItem>
+                <SelectItem value="cs">Software Engineering</SelectItem>
+                {/* <SelectItem value="ee">Electrical Engineering</SelectItem>
+                <SelectItem value="me">Mechanical Engineering</SelectItem> */}
               </SelectContent>
             </Select>
           </div>
@@ -82,41 +82,38 @@ const ViewTimetable = () => {
       {/* Timetable Display */}
       <Card className="p-6 shadow-soft-md">
         <Tabs defaultValue="section" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
+          {/* <TabsList className="grid w-full grid-cols-3 mb-6">
             <TabsTrigger value="section">By Section</TabsTrigger>
             <TabsTrigger value="instructor">By Instructor</TabsTrigger>
             <TabsTrigger value="room">By Room</TabsTrigger>
-          </TabsList>
+          </TabsList> */}
 
           <TabsContent value="section">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-muted">
-                    <th className="border border-border p-4 text-left font-semibold">Time</th>
-                    <th className="border border-border p-4 text-left font-semibold">Monday</th>
-                    <th className="border border-border p-4 text-left font-semibold">Tuesday</th>
-                    <th className="border border-border p-4 text-left font-semibold">Wednesday</th>
-                    <th className="border border-border p-4 text-left font-semibold">Thursday</th>
-                    <th className="border border-border p-4 text-left font-semibold">Friday</th>
+                    <th className="border border-border p-4 text-left font-semibold">Day</th>
+                    {["8:30 AM", "9:30 AM", "10:30 AM", "11:30 AM", "12:30 PM", "1:30 PM", "2:30 PM", "3:30 PM", "4:30 PM", "5:30 PM"].map((slot, i) => (
+                      <th key={i} className="border border-border p-4 text-left font-semibold">{slot}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {["8:00 - 9:00", "9:00 - 10:00", "10:00 - 11:00", "11:00 - 12:00", "12:00 - 1:00", "1:00 - 2:00", "2:00 - 3:00"].map((time, idx) => (
-                    <tr key={idx} className="hover:bg-muted/30 transition-colors">
-                      <td className="border border-border p-4 font-medium">{time}</td>
-                      {[...Array(5)].map((_, dayIdx) => {
+                  {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].map((day, dayIdx) => (
+                    <tr key={day} className="hover:bg-muted/30 transition-colors">
+                      <td className="border border-border p-4 font-semibold">{day}</td>
+                      {[...Array(10)].map((_, slotIdx) => {
                         const hasClass = Math.random() > 0.5;
                         const colors = ["bg-primary/10", "bg-accent/10", "bg-purple-500/10", "bg-blue-500/10"];
                         const randomColor = colors[Math.floor(Math.random() * colors.length)];
-                        
                         return (
-                          <td key={dayIdx} className={`border border-border p-4 ${hasClass ? randomColor : ""}`}>
+                          <td key={slotIdx} className={`border border-border p-4 ${hasClass ? randomColor : ""}`}>
                             {hasClass && (
                               <>
-                                <div className="text-sm font-semibold">CS-{100 + idx}{dayIdx}</div>
+                                <div className="text-sm font-semibold">CS-{200 + dayIdx}{slotIdx}</div>
                                 <div className="text-xs text-muted-foreground">
-                                  Dr. {["Smith", "Johnson", "Williams", "Brown"][Math.floor(Math.random() * 4)]} • R-{100 + dayIdx}
+                                  Dr. {["Smith", "Johnson", "Williams", "Brown"][Math.floor(Math.random() * 4)]} • R-{100 + slotIdx}
                                 </div>
                               </>
                             )}
