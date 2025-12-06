@@ -5,16 +5,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const GenerateTimetable = () => {
   const [instructors, setInstructors] = useState([
-    { name: "Dr. Smith", course: "CS-101" },
-    { name: "Dr. Johnson", course: "EE-201" },
-    { name: "Dr. Williams", course: "ME-301" },
-    { name: "Dr. Brown", course: "CS-201" },
+    { name: "Dr. Smith", course: "CS-101", courseName: "Intro to Programming" },
+    { name: "Dr. Johnson", course: "EE-201", courseName: "Circuit Analysis" },
+    { name: "Dr. Williams", course: "ME-301", courseName: "Mechanics" },
+    { name: "Dr. Brown", course: "CS-201", courseName: "Data Structures" },
   ]);
   const [newInstructorName, setNewInstructorName] = useState("");
   const [newInstructorCourse, setNewInstructorCourse] = useState("");
+  const [newInstructorCourseName, setNewInstructorCourseName] = useState("");
 
   const [rooms, setRooms] = useState([
     { roomNumber: "R-101", roomType: "Lecture Hall" },
@@ -31,7 +34,19 @@ const GenerateTimetable = () => {
   ]);
   const [newCourseCode, setNewCourseCode] = useState("");
   const [newCourseTitle, setNewCourseTitle] = useState("");
-  const [newCourseCreditHours, setNewCourseCreditHours] = useState<number | "">("");
+  const [newCourseCreditHours, setNewCourseCreditHours] = useState<number | "">
+  ("");
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editType, setEditType] = useState<"instructor" | "room" | "course" | null>(null);
+  const [editIndex, setEditIndex] = useState<number | null>(null);
+  const [editInstructor, setEditInstructor] = useState({ name: "", course: "", courseName: "" });
+  const [editRoom, setEditRoom] = useState({ roomNumber: "", roomType: "" });
+  const [editCourse, setEditCourse] = useState<{ code: string; title: string; creditHours: number }>({ code: "", title: "", creditHours: 0 });
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteType, setDeleteType] = useState<"instructor" | "room" | "course" | null>(null);
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
   const classOptions = Array.from({ length: 8 }, (_, i) => i + 1)
     .flatMap((n) => ["A", "B", "C"].map((s) => `${n}-${s}`));
@@ -127,7 +142,9 @@ const GenerateTimetable = () => {
                     <thead>
                       <tr className="bg-muted">
                         <th className="border border-border p-3 text-left font-semibold">Instructor Name</th>
-                        <th className="border border-border p-3 text-left font-semibold">Instructor Course</th>
+                        <th className="border border-border p-3 text-left font-semibold">Course Code</th>
+                        <th className="border border-border p-3 text-left font-semibold">Course Name</th>
+                        <th className="border border-border p-2 text-left font-semibold w-[140px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -135,6 +152,36 @@ const GenerateTimetable = () => {
                         <tr key={`${inst.name}-${idx}`} className="hover:bg-muted/30 transition-colors">
                           <td className="border border-border p-3">{inst.name}</td>
                           <td className="border border-border p-3">{inst.course}</td>
+                          <td className="border border-border p-3">{inst.courseName}</td>
+                          <td className="border border-border p-2 w-[140px] whitespace-nowrap">
+                            <div className="flex gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="px-2"
+                                onClick={() => {
+                                  setEditType("instructor");
+                                  setEditIndex(idx);
+                                  setEditInstructor({ name: inst.name, course: inst.course, courseName: inst.courseName });
+                                  setEditOpen(true);
+                                }}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="px-2"
+                                onClick={() => {
+                                  setDeleteType("instructor");
+                                  setDeleteIndex(idx);
+                                  setDeleteOpen(true);
+                                }}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -146,18 +193,26 @@ const GenerateTimetable = () => {
                     <Input value={newInstructorName} onChange={(e) => setNewInstructorName(e.target.value)} placeholder="e.g., Dr. Ali" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Instructor Course</Label>
+                    <Label>Course Code</Label>
                     <Input value={newInstructorCourse} onChange={(e) => setNewInstructorCourse(e.target.value)} placeholder="e.g., CS-101" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Course Name</Label>
+                    <Input value={newInstructorCourseName} onChange={(e) => setNewInstructorCourseName(e.target.value)} placeholder="e.g., Intro to Programming" />
                   </div>
                   <div className="flex items-end">
                     <Button
                       variant="outline"
                       className="w-full"
                       onClick={() => {
-                        if (!newInstructorName || !newInstructorCourse) return;
-                        setInstructors((prev) => [...prev, { name: newInstructorName, course: newInstructorCourse }]);
+                        if (!newInstructorName || !newInstructorCourse || !newInstructorCourseName) return;
+                        setInstructors((prev) => [
+                          ...prev,
+                          { name: newInstructorName, course: newInstructorCourse, courseName: newInstructorCourseName },
+                        ]);
                         setNewInstructorName("");
                         setNewInstructorCourse("");
+                        setNewInstructorCourseName("");
                       }}
                     >
                       Add Instructor
@@ -178,6 +233,7 @@ const GenerateTimetable = () => {
                       <tr className="bg-muted">
                         <th className="border border-border p-3 text-left font-semibold">Room Number</th>
                         <th className="border border-border p-3 text-left font-semibold">Room Type</th>
+                        <th className="border border-border p-2 text-left font-semibold w-[140px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -185,6 +241,35 @@ const GenerateTimetable = () => {
                         <tr key={`${room.roomNumber}-${idx}`} className="hover:bg-muted/30 transition-colors">
                           <td className="border border-border p-3">{room.roomNumber}</td>
                           <td className="border border-border p-3">{room.roomType}</td>
+                          <td className="border border-border p-2 w-[140px] whitespace-nowrap">
+                            <div className="flex gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="px-2"
+                                onClick={() => {
+                                  setEditType("room");
+                                  setEditIndex(idx);
+                                  setEditRoom({ roomNumber: room.roomNumber, roomType: room.roomType });
+                                  setEditOpen(true);
+                                }}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="px-2"
+                                onClick={() => {
+                                  setDeleteType("room");
+                                  setDeleteIndex(idx);
+                                  setDeleteOpen(true);
+                                }}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -237,6 +322,7 @@ const GenerateTimetable = () => {
                         <th className="border border-border p-3 text-left font-semibold">Course Code</th>
                         <th className="border border-border p-3 text-left font-semibold">Course Title</th>
                         <th className="border border-border p-3 text-left font-semibold">Credit Hours</th>
+                        <th className="border border-border p-2 text-left font-semibold w-[140px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -245,6 +331,35 @@ const GenerateTimetable = () => {
                           <td className="border border-border p-3">{c.code}</td>
                           <td className="border border-border p-3">{c.title}</td>
                           <td className="border border-border p-3">{c.creditHours}</td>
+                          <td className="border border-border p-2 w-[140px] whitespace-nowrap">
+                            <div className="flex gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="px-2"
+                                onClick={() => {
+                                  setEditType("course");
+                                  setEditIndex(idx);
+                                  setEditCourse({ code: c.code, title: c.title, creditHours: c.creditHours });
+                                  setEditOpen(true);
+                                }}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="px-2"
+                                onClick={() => {
+                                  setDeleteType("course");
+                                  setDeleteIndex(idx);
+                                  setDeleteOpen(true);
+                                }}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -296,6 +411,115 @@ const GenerateTimetable = () => {
             </AccordionItem>
           </Accordion>
         </Card>
+
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit</DialogTitle>
+            </DialogHeader>
+            {editType === "instructor" && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Instructor Name</Label>
+                  <Input value={editInstructor.name} onChange={(e) => setEditInstructor({ ...editInstructor, name: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Course Code</Label>
+                  <Input value={editInstructor.course} onChange={(e) => setEditInstructor({ ...editInstructor, course: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Course Name</Label>
+                  <Input value={editInstructor.courseName} onChange={(e) => setEditInstructor({ ...editInstructor, courseName: e.target.value })} />
+                </div>
+              </div>
+            )}
+            {editType === "room" && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Room Number</Label>
+                  <Input value={editRoom.roomNumber} onChange={(e) => setEditRoom({ ...editRoom, roomNumber: e.target.value })} />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Room Type</Label>
+                  <Select value={editRoom.roomType} onValueChange={(v) => setEditRoom({ ...editRoom, roomType: v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Lecture Hall">Lecture Hall</SelectItem>
+                      <SelectItem value="Lab">Lab</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+            {editType === "course" && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>Course Code</Label>
+                  <Input value={editCourse.code} onChange={(e) => setEditCourse({ ...editCourse, code: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Course Title</Label>
+                  <Input value={editCourse.title} onChange={(e) => setEditCourse({ ...editCourse, title: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Credit Hours</Label>
+                  <Input type="number" min={0} step={1} value={editCourse.creditHours} onChange={(e) => setEditCourse({ ...editCourse, creditHours: Math.max(0, Number(e.target.value)) })} />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (editIndex === null || editType === null) return;
+                  if (editType === "instructor") {
+                    setInstructors((prev) => prev.map((x, i) => (i === editIndex ? { name: editInstructor.name, course: editInstructor.course, courseName: editInstructor.courseName } : x)));
+                  } else if (editType === "room") {
+                    setRooms((prev) => prev.map((x, i) => (i === editIndex ? { roomNumber: editRoom.roomNumber, roomType: editRoom.roomType } : x)));
+                  } else if (editType === "course") {
+                    setCourses((prev) => prev.map((x, i) => (i === editIndex ? { code: editCourse.code, title: editCourse.title, creditHours: editCourse.creditHours } : x)));
+                  }
+                  setEditOpen(false);
+                  setEditType(null);
+                  setEditIndex(null);
+                }}
+              >
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+              <AlertDialogDescription>This action will remove the selected item.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  if (deleteIndex === null || deleteType === null) return;
+                  if (deleteType === "instructor") {
+                    setInstructors((prev) => prev.filter((_, i) => i !== deleteIndex));
+                  } else if (deleteType === "room") {
+                    setRooms((prev) => prev.filter((_, i) => i !== deleteIndex));
+                  } else if (deleteType === "course") {
+                    setCourses((prev) => prev.filter((_, i) => i !== deleteIndex));
+                  }
+                  setDeleteOpen(false);
+                  setDeleteType(null);
+                  setDeleteIndex(null);
+                }}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
     </div>
   );
 };
