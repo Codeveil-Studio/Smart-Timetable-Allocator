@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,31 +7,39 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { toast } from "@/components/ui/sonner";
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
+const apiFetch = async (url: string, init?: RequestInit): Promise<unknown> => {
+  const res = await fetch(url, init);
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    const data: unknown = await res.json();
+    if (!res.ok) {
+      const errMsg = (data as { error?: string; message?: string })?.error || (data as { message?: string })?.message || "Request failed";
+      throw new Error(errMsg);
+    }
+    return data;
+  }
+  const text = await res.text();
+  if (!res.ok) throw new Error(text || "Request failed");
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+};
 
 const GenerateTimetable = () => {
-  const [instructors, setInstructors] = useState([
-    { name: "Dr. Smith", course: "CS-101", courseName: "Intro to Programming" },
-    { name: "Dr. Johnson", course: "EE-201", courseName: "Circuit Analysis" },
-    { name: "Dr. Williams", course: "ME-301", courseName: "Mechanics" },
-    { name: "Dr. Brown", course: "CS-201", courseName: "Data Structures" },
-  ]);
+  const [instructors, setInstructors] = useState<{ id: number; name: string; course: string; courseName: string }[]>([]);
   const [newInstructorName, setNewInstructorName] = useState("");
   const [newInstructorCourse, setNewInstructorCourse] = useState("");
   const [newInstructorCourseName, setNewInstructorCourseName] = useState("");
 
-  const [rooms, setRooms] = useState([
-    { roomNumber: "R-101", roomType: "Lecture Hall" },
-    { roomNumber: "R-202", roomType: "Lab" },
-    { roomNumber: "R-303", roomType: "Lecture Hall" },
-  ]);
+  const [rooms, setRooms] = useState<{ id: number; roomNumber: string; roomType: string }[]>([]);
   const [newRoomNumber, setNewRoomNumber] = useState("");
   const [newRoomType, setNewRoomType] = useState("");
 
-  const [courses, setCourses] = useState([
-    { code: "CS-101", title: "Intro to Programming", creditHours: 3 },
-    { code: "EE-201", title: "Circuit Analysis", creditHours: 3 },
-    { code: "ME-301", title: "Mechanics", creditHours: 3 },
-  ]);
+  const [courses, setCourses] = useState<{ id: number; code: string; title: string; creditHours: number }[]>([]);
   const [newCourseCode, setNewCourseCode] = useState("");
   const [newCourseTitle, setNewCourseTitle] = useState("");
   const [newCourseCreditHours, setNewCourseCreditHours] = useState<number | "">
@@ -47,6 +55,23 @@ const GenerateTimetable = () => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteType, setDeleteType] = useState<"instructor" | "room" | "course" | null>(null);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
+
+  const loadData = async () => {
+    try {
+      const insData: unknown = await apiFetch(`${API_BASE}/instructors`);
+      setInstructors((insData as Array<{ id: number; name: string; course_code: string; course_name: string }>).map((x) => ({ id: x.id, name: x.name, course: x.course_code, courseName: x.course_name })));
+      const rmData: unknown = await apiFetch(`${API_BASE}/rooms`);
+      setRooms((rmData as Array<{ id: number; room_number: string; room_type: string }>).map((x) => ({ id: x.id, roomNumber: x.room_number, roomType: x.room_type })));
+      const crData: unknown = await apiFetch(`${API_BASE}/courses`);
+      setCourses((crData as Array<{ id: number; code: string; title: string; credit_hours: number }>).map((x) => ({ id: x.id, code: x.code, title: x.title, creditHours: x.credit_hours })));
+    } catch (e) {
+      console.error("Failed to load data");
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const classOptions = Array.from({ length: 8 }, (_, i) => i + 1)
     .flatMap((n) => ["A", "B", "C"].map((s) => `${n}-${s}`));
@@ -206,10 +231,20 @@ const GenerateTimetable = () => {
                       className="w-full"
                       onClick={() => {
                         if (!newInstructorName || !newInstructorCourse || !newInstructorCourseName) return;
-                        setInstructors((prev) => [
-                          ...prev,
-                          { name: newInstructorName, course: newInstructorCourse, courseName: newInstructorCourseName },
-                        ]);
+                        (async () => {
+                          try {
+                            const row = (await apiFetch(`${API_BASE}/instructors`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ name: newInstructorName, course: newInstructorCourse, courseName: newInstructorCourseName }),
+                            })) as { id: number; name: string; course_code: string; course_name: string };
+                            setInstructors((prev) => [...prev, { id: row.id, name: row.name, course: row.course_code, courseName: row.course_name }]);
+                            toast.success("Instructor added", { description: `${row.name} (${row.course_code})` });
+                          } catch (e) {
+                            const msg = e instanceof Error ? e.message : "Failed to add instructor";
+                            toast.error("Failed to add instructor", { description: msg });
+                          }
+                        })();
                         setNewInstructorName("");
                         setNewInstructorCourse("");
                         setNewInstructorCourseName("");
@@ -298,7 +333,20 @@ const GenerateTimetable = () => {
                       className="w-full"
                       onClick={() => {
                         if (!newRoomNumber || !newRoomType) return;
-                        setRooms((prev) => [...prev, { roomNumber: newRoomNumber, roomType: newRoomType }]);
+                        (async () => {
+                          try {
+                            const row = (await apiFetch(`${API_BASE}/rooms`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ roomNumber: newRoomNumber, roomType: newRoomType }),
+                            })) as { id: number; room_number: string; room_type: string };
+                            setRooms((prev) => [...prev, { id: row.id, roomNumber: row.room_number, roomType: row.room_type }]);
+                            toast.success("Room added", { description: `${row.room_number} (${row.room_type})` });
+                          } catch (e) {
+                            const msg = e instanceof Error ? e.message : "Failed to add room";
+                            toast.error("Failed to add room", { description: msg });
+                          }
+                        })();
                         setNewRoomNumber("");
                         setNewRoomType("");
                       }}
@@ -394,10 +442,20 @@ const GenerateTimetable = () => {
                       className="w-full"
                       onClick={() => {
                         if (!newCourseCode || !newCourseTitle || newCourseCreditHours === "") return;
-                        setCourses((prev) => [
-                          ...prev,
-                          { code: newCourseCode, title: newCourseTitle, creditHours: Number(newCourseCreditHours) },
-                        ]);
+                        (async () => {
+                          try {
+                            const row = (await apiFetch(`${API_BASE}/courses`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ code: newCourseCode, title: newCourseTitle, creditHours: Number(newCourseCreditHours) }),
+                            })) as { id: number; code: string; title: string; credit_hours: number };
+                            setCourses((prev) => [...prev, { id: row.id, code: row.code, title: row.title, creditHours: row.credit_hours }]);
+                            toast.success("Course added", { description: `${row.code} — ${row.title}` });
+                          } catch (e) {
+                            const msg = e instanceof Error ? e.message : "Failed to add course";
+                            toast.error("Failed to add course", { description: msg });
+                          }
+                        })();
                         setNewCourseCode("");
                         setNewCourseTitle("");
                         setNewCourseCreditHours("");
@@ -475,11 +533,53 @@ const GenerateTimetable = () => {
                 onClick={() => {
                   if (editIndex === null || editType === null) return;
                   if (editType === "instructor") {
-                    setInstructors((prev) => prev.map((x, i) => (i === editIndex ? { name: editInstructor.name, course: editInstructor.course, courseName: editInstructor.courseName } : x)));
+                    const id = instructors[editIndex].id;
+                    (async () => {
+                      try {
+                        const row = (await apiFetch(`${API_BASE}/instructors`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id, name: editInstructor.name, course: editInstructor.course, courseName: editInstructor.courseName }),
+                        })) as { name: string; course_code: string; course_name: string };
+                        setInstructors((prev) => prev.map((x, i) => (i === editIndex ? { id, name: row.name, course: row.course_code, courseName: row.course_name } : x)));
+                        toast.success("Instructor updated", { description: `${row.name} (${row.course_code})` });
+                      } catch (e) {
+                        const msg = e instanceof Error ? e.message : "Failed to update instructor";
+                        toast.error("Failed to update instructor", { description: msg });
+                      }
+                    })();
                   } else if (editType === "room") {
-                    setRooms((prev) => prev.map((x, i) => (i === editIndex ? { roomNumber: editRoom.roomNumber, roomType: editRoom.roomType } : x)));
+                    const id = rooms[editIndex].id;
+                    (async () => {
+                      try {
+                        const row = (await apiFetch(`${API_BASE}/rooms`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id, roomNumber: editRoom.roomNumber, roomType: editRoom.roomType }),
+                        })) as { room_number: string; room_type: string };
+                        setRooms((prev) => prev.map((x, i) => (i === editIndex ? { id, roomNumber: row.room_number, roomType: row.room_type } : x)));
+                        toast.success("Room updated", { description: `${row.room_number} (${row.room_type})` });
+                      } catch (e) {
+                        const msg = e instanceof Error ? e.message : "Failed to update room";
+                        toast.error("Failed to update room", { description: msg });
+                      }
+                    })();
                   } else if (editType === "course") {
-                    setCourses((prev) => prev.map((x, i) => (i === editIndex ? { code: editCourse.code, title: editCourse.title, creditHours: editCourse.creditHours } : x)));
+                    const id = courses[editIndex].id;
+                    (async () => {
+                      try {
+                        const row = (await apiFetch(`${API_BASE}/courses`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id, code: editCourse.code, title: editCourse.title, creditHours: editCourse.creditHours }),
+                        })) as { code: string; title: string; credit_hours: number };
+                        setCourses((prev) => prev.map((x, i) => (i === editIndex ? { id, code: row.code, title: row.title, creditHours: row.credit_hours } : x)));
+                        toast.success("Course updated", { description: `${row.code} — ${row.title}` });
+                      } catch (e) {
+                        const msg = e instanceof Error ? e.message : "Failed to update course";
+                        toast.error("Failed to update course", { description: msg });
+                      }
+                    })();
                   }
                   setEditOpen(false);
                   setEditType(null);
@@ -504,11 +604,41 @@ const GenerateTimetable = () => {
                 onClick={() => {
                   if (deleteIndex === null || deleteType === null) return;
                   if (deleteType === "instructor") {
-                    setInstructors((prev) => prev.filter((_, i) => i !== deleteIndex));
+                    const id = instructors[deleteIndex].id;
+                    (async () => {
+                      try {
+                        await apiFetch(`${API_BASE}/instructors`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+                        setInstructors((prev) => prev.filter((_, i) => i !== deleteIndex));
+                        toast.success("Instructor deleted");
+                      } catch (e) {
+                        const msg = e instanceof Error ? e.message : "Failed to delete instructor";
+                        toast.error("Failed to delete instructor", { description: msg });
+                      }
+                    })();
                   } else if (deleteType === "room") {
-                    setRooms((prev) => prev.filter((_, i) => i !== deleteIndex));
+                    const id = rooms[deleteIndex].id;
+                    (async () => {
+                      try {
+                        await apiFetch(`${API_BASE}/rooms`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+                        setRooms((prev) => prev.filter((_, i) => i !== deleteIndex));
+                        toast.success("Room deleted");
+                      } catch (e) {
+                        const msg = e instanceof Error ? e.message : "Failed to delete room";
+                        toast.error("Failed to delete room", { description: msg });
+                      }
+                    })();
                   } else if (deleteType === "course") {
-                    setCourses((prev) => prev.filter((_, i) => i !== deleteIndex));
+                    const id = courses[deleteIndex].id;
+                    (async () => {
+                      try {
+                        await apiFetch(`${API_BASE}/courses`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+                        setCourses((prev) => prev.filter((_, i) => i !== deleteIndex));
+                        toast.success("Course deleted");
+                      } catch (e) {
+                        const msg = e instanceof Error ? e.message : "Failed to delete course";
+                        toast.error("Failed to delete course", { description: msg });
+                      }
+                    })();
                   }
                   setDeleteOpen(false);
                   setDeleteType(null);
