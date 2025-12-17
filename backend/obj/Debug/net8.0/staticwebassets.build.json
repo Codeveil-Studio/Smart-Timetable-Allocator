@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "JI0RV7hOqYv3qVQLhyrOjz35GFMGIsHTg/WRqg0pw9g=",
+  "Source": "SmartScheduleBackend",
+  "BasePath": "_content/SmartScheduleBackend",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}

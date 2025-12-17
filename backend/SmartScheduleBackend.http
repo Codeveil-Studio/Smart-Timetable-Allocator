@@ -1,0 +1,6 @@
+@SmartScheduleBackend_HostAddress = http://localhost:5263
+
+GET {{SmartScheduleBackend_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

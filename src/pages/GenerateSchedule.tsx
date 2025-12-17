@@ -120,9 +120,41 @@ const GenerateSchedule = () => {
       <Card className="p-6 shadow-soft-md">
         <div className="flex flex-row items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-foreground">Generate Timetable</h2>
-          <Button onClick={() => {
+          <Button onClick={async () => {
+            if (!selectedClass) {
+              toast.error("Please select a class");
+              return;
+            }
+            const courses = classCourses[selectedClass] || [];
+            const rooms = classRooms[selectedClass] || [];
+
+            if (courses.length === 0) {
+              toast.error("Please add courses");
+              return;
+            }
+            if (rooms.length === 0) {
+              toast.error("Please add rooms");
+              return;
+            }
+
             console.log("Generating timetable with:", { classCourses, classRooms });
             toast.info("Generating timetable...");
+
+            try {
+              await apiFetch(`${API_BASE}/timetable/generate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  className: selectedClass,
+                  courseIds: courses.map(c => c.id),
+                  roomIds: rooms.map(r => r.id)
+                })
+              });
+              toast.success("Timetable generated successfully!");
+            } catch (e: any) {
+              console.error(e);
+              toast.error(e.message || "Failed to generate timetable");
+            }
           }}>
             Generate Timetable
           </Button>

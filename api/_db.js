@@ -37,6 +37,27 @@ export const ensureSchema = async () => {
     instructor_id integer REFERENCES instructors(id)
   )`;
   
+  await sql`CREATE TABLE IF NOT EXISTS academic_class (
+    id serial PRIMARY KEY,
+    name text NOT NULL
+  )`;
+
+  await sql`CREATE TABLE IF NOT EXISTS time_slot (
+    id serial PRIMARY KEY,
+    day text NOT NULL,
+    start_time time NOT NULL,
+    end_time time NOT NULL
+  )`;
+
+  await sql`CREATE TABLE IF NOT EXISTS timetable (
+    id serial PRIMARY KEY,
+    academic_class_id integer REFERENCES academic_class(id),
+    course_id integer REFERENCES courses(id),
+    instructor_id integer REFERENCES instructors(id),
+    room_id integer REFERENCES rooms(id),
+    time_slot_id integer REFERENCES time_slot(id)
+  )`;
+  
   // Add instructor_id if it was missing in existing courses table
   try {
     await sql`ALTER TABLE courses ADD COLUMN IF NOT EXISTS instructor_id integer REFERENCES instructors(id)`;
