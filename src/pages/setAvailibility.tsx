@@ -8,7 +8,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/components/ui/sonner";
+
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
+
 const apiFetch = async (url: string, init?: RequestInit): Promise<unknown> => {
   const res = await fetch(url, init);
   const ct = res.headers.get("content-type") || "";
@@ -30,28 +32,32 @@ const apiFetch = async (url: string, init?: RequestInit): Promise<unknown> => {
 };
 
 const GenerateTimetable = () => {
-  const [instructors, setInstructors] = useState<{ id: number; name: string; course: string; courseName: string }[]>([]);
+  // Instructors State
+  const [instructors, setInstructors] = useState<{ id: number; name: string }[]>([]);
   const [newInstructorName, setNewInstructorName] = useState("");
-  const [newInstructorCourse, setNewInstructorCourse] = useState("");
-  const [newInstructorCourseName, setNewInstructorCourseName] = useState("");
 
+  // Rooms State
   const [rooms, setRooms] = useState<{ id: number; roomNumber: string; roomType: string }[]>([]);
   const [newRoomNumber, setNewRoomNumber] = useState("");
   const [newRoomType, setNewRoomType] = useState("");
 
-  const [courses, setCourses] = useState<{ id: number; code: string; title: string; creditHours: number }[]>([]);
+  // Courses State
+  const [courses, setCourses] = useState<{ id: number; code: string; title: string; creditHours: number; instructorId?: number | null }[]>([]);
   const [newCourseCode, setNewCourseCode] = useState("");
   const [newCourseTitle, setNewCourseTitle] = useState("");
-  const [newCourseCreditHours, setNewCourseCreditHours] = useState<number | "">
-  ("");
+  const [newCourseCreditHours, setNewCourseCreditHours] = useState<number | "">("");
+  const [newCourseInstructorId, setNewCourseInstructorId] = useState<string>("no-instructor");
 
+  // Edit State
   const [editOpen, setEditOpen] = useState(false);
   const [editType, setEditType] = useState<"instructor" | "room" | "course" | null>(null);
   const [editIndex, setEditIndex] = useState<number | null>(null);
-  const [editInstructor, setEditInstructor] = useState({ name: "", course: "", courseName: "" });
+  
+  const [editInstructor, setEditInstructor] = useState({ name: "" });
   const [editRoom, setEditRoom] = useState({ roomNumber: "", roomType: "" });
-  const [editCourse, setEditCourse] = useState<{ code: string; title: string; creditHours: number }>({ code: "", title: "", creditHours: 0 });
+  const [editCourse, setEditCourse] = useState<{ code: string; title: string; creditHours: number; instructorId: string }>({ code: "", title: "", creditHours: 0, instructorId: "no-instructor" });
 
+  // Delete State
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteType, setDeleteType] = useState<"instructor" | "room" | "course" | null>(null);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
@@ -59,13 +65,22 @@ const GenerateTimetable = () => {
   const loadData = async () => {
     try {
       const insData: unknown = await apiFetch(`${API_BASE}/instructors`);
-      setInstructors((insData as Array<{ id: number; name: string; course_code: string; course_name: string }>).map((x) => ({ id: x.id, name: x.name, course: x.course_code, courseName: x.course_name })));
+      setInstructors((insData as Array<{ id: number; name: string }>).map((x) => ({ id: x.id, name: x.name })));
+
       const rmData: unknown = await apiFetch(`${API_BASE}/rooms`);
       setRooms((rmData as Array<{ id: number; room_number: string; room_type: string }>).map((x) => ({ id: x.id, roomNumber: x.room_number, roomType: x.room_type })));
+
       const crData: unknown = await apiFetch(`${API_BASE}/courses`);
-      setCourses((crData as Array<{ id: number; code: string; title: string; credit_hours: number }>).map((x) => ({ id: x.id, code: x.code, title: x.title, creditHours: x.credit_hours })));
+      setCourses((crData as Array<{ id: number; code: string; title: string; credit_hours: number; instructor_id?: number }>).map((x) => ({ 
+        id: x.id, 
+        code: x.code, 
+        title: x.title, 
+        creditHours: x.credit_hours,
+        instructorId: x.instructor_id
+      })));
     } catch (e) {
-      console.error("Failed to load data");
+      console.error("Failed to load data", e);
+      toast.error("Failed to load data", { description: "Check server connection or database configuration." });
     }
   };
 
@@ -73,90 +88,14 @@ const GenerateTimetable = () => {
     loadData();
   }, []);
 
-  const classOptions = Array.from({ length: 8 }, (_, i) => i + 1)
-    .flatMap((n) => ["A", "B", "C"].map((s) => `${n}-${s}`));
-  const [selectedClass, setSelectedClass] = useState<string>(classOptions[0]);
-  const [classCourses, setClassCourses] = useState<Record<string, { code: string; title: string }[]>>({});
-  const [classRooms, setClassRooms] = useState<Record<string, { roomNumber: string; roomType: string }[]>>({});
-  const [courseFilter, setCourseFilter] = useState("");
-  const [roomFilter, setRoomFilter] = useState("");
-  const availableCourses = [
-    { code: "CS-101", title: "Intro to Programming" },
-    { code: "CS-201", title: "Data Structures" },
-    { code: "EE-201", title: "Circuit Analysis" },
-    { code: "ME-301", title: "Mechanics" },
-    { code: "CS-301", title: "Algorithms" },
-  ];
-  const availableRooms = [
-    { roomNumber: "R-101", roomType: "Lecture Hall" },
-    { roomNumber: "R-202", roomType: "Lab" },
-    { roomNumber: "R-303", roomType: "Lecture Hall" },
-    { roomNumber: "R-404", roomType: "Lab" },
-  ];
-
   return (
     <div className="animate-fade-in space-y-6">
       <Card className="p-6 shadow-soft-md">
         <h2 className="text-2xl font-bold text-foreground mb-6">Set Availibility</h2>
 
-          {/* Basic Setup */}
-          {/* <div className="space-y-6 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Semester</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select semester" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="spring">Spring</SelectItem>
-                    <SelectItem value="fall">Fall</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Year</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select year" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="2024">2024</SelectItem>
-                    <SelectItem value="2025">2025</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Department</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cs">Computer Science</SelectItem>
-                    <SelectItem value="ee">Electrical Engineering</SelectItem>
-                    <SelectItem value="me">Mechanical Engineering</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div> */}
-
-          {/* File Upload */}
-          {/* <div className="mb-6">
-            <Label className="mb-2 block">Upload Course Data (CSV/Excel)</Label>
-            <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-primary transition-all duration-300 cursor-pointer group">
-              <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-3 group-hover:text-primary transition-colors" />
-              <p className="text-sm text-muted-foreground">
-                Click to upload or drag and drop
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">CSV, XLSX (MAX. 5MB)</p>
-            </div>
-          </div> */}
-
           <Accordion type="single" collapsible className="mb-6">
+            
+            {/* INSTRUCTORS SECTION */}
             <AccordionItem value="instructors" className="border rounded-xl px-4 mb-3">
               <AccordionTrigger className="hover:no-underline">
                 <span className="font-semibold">Instructor Constraints</span>
@@ -166,18 +105,16 @@ const GenerateTimetable = () => {
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="bg-muted">
+                        <th className="border border-border p-3 text-left font-semibold w-[80px]">ID</th>
                         <th className="border border-border p-3 text-left font-semibold">Instructor Name</th>
-                        <th className="border border-border p-3 text-left font-semibold">Course Code</th>
-                        <th className="border border-border p-3 text-left font-semibold">Course Name</th>
                         <th className="border border-border p-2 text-left font-semibold w-[140px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {instructors.map((inst, idx) => (
-                        <tr key={`${inst.name}-${idx}`} className="hover:bg-muted/30 transition-colors">
+                        <tr key={`${inst.id}-${idx}`} className="hover:bg-muted/30 transition-colors">
+                          <td className="border border-border p-3">{inst.id}</td>
                           <td className="border border-border p-3">{inst.name}</td>
-                          <td className="border border-border p-3">{inst.course}</td>
-                          <td className="border border-border p-3">{inst.courseName}</td>
                           <td className="border border-border p-2 w-[140px] whitespace-nowrap">
                             <div className="flex gap-1">
                               <Button
@@ -187,7 +124,7 @@ const GenerateTimetable = () => {
                                 onClick={() => {
                                   setEditType("instructor");
                                   setEditIndex(idx);
-                                  setEditInstructor({ name: inst.name, course: inst.course, courseName: inst.courseName });
+                                  setEditInstructor({ name: inst.name });
                                   setEditOpen(true);
                                 }}
                               >
@@ -212,42 +149,32 @@ const GenerateTimetable = () => {
                     </tbody>
                   </table>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Instructor Name</Label>
                     <Input value={newInstructorName} onChange={(e) => setNewInstructorName(e.target.value)} placeholder="e.g., Dr. Ali" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Course Code</Label>
-                    <Input value={newInstructorCourse} onChange={(e) => setNewInstructorCourse(e.target.value)} placeholder="e.g., CS-101" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Course Name</Label>
-                    <Input value={newInstructorCourseName} onChange={(e) => setNewInstructorCourseName(e.target.value)} placeholder="e.g., Intro to Programming" />
                   </div>
                   <div className="flex items-end">
                     <Button
                       variant="outline"
                       className="w-full"
                       onClick={() => {
-                        if (!newInstructorName || !newInstructorCourse || !newInstructorCourseName) return;
+                        if (!newInstructorName) return;
                         (async () => {
                           try {
                             const row = (await apiFetch(`${API_BASE}/instructors`, {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ name: newInstructorName, course: newInstructorCourse, courseName: newInstructorCourseName }),
-                            })) as { id: number; name: string; course_code: string; course_name: string };
-                            setInstructors((prev) => [...prev, { id: row.id, name: row.name, course: row.course_code, courseName: row.course_name }]);
-                            toast.success("Instructor added", { description: `${row.name} (${row.course_code})` });
+                              body: JSON.stringify({ name: newInstructorName }),
+                            })) as { id: number; name: string };
+                            setInstructors((prev) => [...prev, { id: row.id, name: row.name }]);
+                            toast.success("Instructor added", { description: row.name });
                           } catch (e) {
                             const msg = e instanceof Error ? e.message : "Failed to add instructor";
                             toast.error("Failed to add instructor", { description: msg });
                           }
                         })();
                         setNewInstructorName("");
-                        setNewInstructorCourse("");
-                        setNewInstructorCourseName("");
                       }}
                     >
                       Add Instructor
@@ -257,6 +184,7 @@ const GenerateTimetable = () => {
               </AccordionContent>
             </AccordionItem>
 
+            {/* ROOMS SECTION */}
             <AccordionItem value="rooms" className="border rounded-xl px-4 mb-3">
               <AccordionTrigger className="hover:no-underline">
                 <span className="font-semibold">Room Constraints</span>
@@ -358,6 +286,7 @@ const GenerateTimetable = () => {
               </AccordionContent>
             </AccordionItem>
 
+            {/* COURSES SECTION */}
             <AccordionItem value="courses" className="border rounded-xl px-4">
               <AccordionTrigger className="hover:no-underline">
                 <span className="font-semibold">Course Setup</span>
@@ -388,7 +317,12 @@ const GenerateTimetable = () => {
                                 onClick={() => {
                                   setEditType("course");
                                   setEditIndex(idx);
-                                  setEditCourse({ code: c.code, title: c.title, creditHours: c.creditHours });
+                                  setEditCourse({ 
+                                    code: c.code, 
+                                    title: c.title, 
+                                    creditHours: c.creditHours,
+                                    instructorId: c.instructorId ? String(c.instructorId) : "no-instructor"
+                                  });
                                   setEditOpen(true);
                                 }}
                               >
@@ -436,7 +370,21 @@ const GenerateTimetable = () => {
                       placeholder="e.g., 3"
                     />
                   </div>
-                  <div className="flex items-end">
+                   <div className="space-y-2">
+                    <Label>Instructor (Optional)</Label>
+                    <Select value={newCourseInstructorId} onValueChange={setNewCourseInstructorId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select instructor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="no-instructor">None</SelectItem>
+                        {instructors.map(inst => (
+                            <SelectItem key={inst.id} value={String(inst.id)}>{inst.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-end md:col-span-4 lg:col-span-1">
                     <Button
                       variant="outline"
                       className="w-full"
@@ -444,12 +392,18 @@ const GenerateTimetable = () => {
                         if (!newCourseCode || !newCourseTitle || newCourseCreditHours === "") return;
                         (async () => {
                           try {
+                            const instructorIdVal = newCourseInstructorId === "no-instructor" ? null : Number(newCourseInstructorId);
                             const row = (await apiFetch(`${API_BASE}/courses`, {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ code: newCourseCode, title: newCourseTitle, creditHours: Number(newCourseCreditHours) }),
-                            })) as { id: number; code: string; title: string; credit_hours: number };
-                            setCourses((prev) => [...prev, { id: row.id, code: row.code, title: row.title, creditHours: row.credit_hours }]);
+                              body: JSON.stringify({ 
+                                code: newCourseCode, 
+                                title: newCourseTitle, 
+                                creditHours: Number(newCourseCreditHours),
+                                instructorId: instructorIdVal
+                              }),
+                            })) as { id: number; code: string; title: string; credit_hours: number; instructor_id?: number };
+                            setCourses((prev) => [...prev, { id: row.id, code: row.code, title: row.title, creditHours: row.credit_hours, instructorId: row.instructor_id }]);
                             toast.success("Course added", { description: `${row.code} — ${row.title}` });
                           } catch (e) {
                             const msg = e instanceof Error ? e.message : "Failed to add course";
@@ -459,6 +413,7 @@ const GenerateTimetable = () => {
                         setNewCourseCode("");
                         setNewCourseTitle("");
                         setNewCourseCreditHours("");
+                        setNewCourseInstructorId("no-instructor");
                       }}
                     >
                       Add Course
@@ -470,34 +425,27 @@ const GenerateTimetable = () => {
           </Accordion>
         </Card>
 
+        {/* EDIT DIALOG */}
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Edit</DialogTitle>
             </DialogHeader>
             {editType === "instructor" && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <Label>Instructor Name</Label>
                   <Input value={editInstructor.name} onChange={(e) => setEditInstructor({ ...editInstructor, name: e.target.value })} />
                 </div>
-                <div className="space-y-2">
-                  <Label>Course Code</Label>
-                  <Input value={editInstructor.course} onChange={(e) => setEditInstructor({ ...editInstructor, course: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Course Name</Label>
-                  <Input value={editInstructor.courseName} onChange={(e) => setEditInstructor({ ...editInstructor, courseName: e.target.value })} />
-                </div>
               </div>
             )}
             {editType === "room" && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Room Number</Label>
                   <Input value={editRoom.roomNumber} onChange={(e) => setEditRoom({ ...editRoom, roomNumber: e.target.value })} />
                 </div>
-                <div className="space-y-2 md:col-span-2">
+                <div className="space-y-2">
                   <Label>Room Type</Label>
                   <Select value={editRoom.roomType} onValueChange={(v) => setEditRoom({ ...editRoom, roomType: v })}>
                     <SelectTrigger>
@@ -512,7 +460,7 @@ const GenerateTimetable = () => {
               </div>
             )}
             {editType === "course" && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Course Code</Label>
                   <Input value={editCourse.code} onChange={(e) => setEditCourse({ ...editCourse, code: e.target.value })} />
@@ -525,6 +473,20 @@ const GenerateTimetable = () => {
                   <Label>Credit Hours</Label>
                   <Input type="number" min={0} step={1} value={editCourse.creditHours} onChange={(e) => setEditCourse({ ...editCourse, creditHours: Math.max(0, Number(e.target.value)) })} />
                 </div>
+                <div className="space-y-2">
+                    <Label>Instructor</Label>
+                    <Select value={editCourse.instructorId} onValueChange={(v) => setEditCourse({ ...editCourse, instructorId: v })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select instructor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="no-instructor">None</SelectItem>
+                        {instructors.map(inst => (
+                            <SelectItem key={inst.id} value={String(inst.id)}>{inst.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
               </div>
             )}
             <DialogFooter>
@@ -539,10 +501,10 @@ const GenerateTimetable = () => {
                         const row = (await apiFetch(`${API_BASE}/instructors`, {
                           method: "PUT",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ id, name: editInstructor.name, course: editInstructor.course, courseName: editInstructor.courseName }),
-                        })) as { name: string; course_code: string; course_name: string };
-                        setInstructors((prev) => prev.map((x, i) => (i === editIndex ? { id, name: row.name, course: row.course_code, courseName: row.course_name } : x)));
-                        toast.success("Instructor updated", { description: `${row.name} (${row.course_code})` });
+                          body: JSON.stringify({ id, name: editInstructor.name }),
+                        })) as { name: string };
+                        setInstructors((prev) => prev.map((x, i) => (i === editIndex ? { id, name: row.name } : x)));
+                        toast.success("Instructor updated", { description: row.name });
                       } catch (e) {
                         const msg = e instanceof Error ? e.message : "Failed to update instructor";
                         toast.error("Failed to update instructor", { description: msg });
@@ -568,12 +530,19 @@ const GenerateTimetable = () => {
                     const id = courses[editIndex].id;
                     (async () => {
                       try {
+                         const instructorIdVal = editCourse.instructorId === "no-instructor" ? null : Number(editCourse.instructorId);
                         const row = (await apiFetch(`${API_BASE}/courses`, {
                           method: "PUT",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ id, code: editCourse.code, title: editCourse.title, creditHours: editCourse.creditHours }),
-                        })) as { code: string; title: string; credit_hours: number };
-                        setCourses((prev) => prev.map((x, i) => (i === editIndex ? { id, code: row.code, title: row.title, creditHours: row.credit_hours } : x)));
+                          body: JSON.stringify({ 
+                            id, 
+                            code: editCourse.code, 
+                            title: editCourse.title, 
+                            creditHours: editCourse.creditHours,
+                            instructorId: instructorIdVal
+                          }),
+                        })) as { code: string; title: string; credit_hours: number; instructor_id?: number };
+                        setCourses((prev) => prev.map((x, i) => (i === editIndex ? { id, code: row.code, title: row.title, creditHours: row.credit_hours, instructorId: row.instructor_id } : x)));
                         toast.success("Course updated", { description: `${row.code} — ${row.title}` });
                       } catch (e) {
                         const msg = e instanceof Error ? e.message : "Failed to update course";
@@ -592,6 +561,7 @@ const GenerateTimetable = () => {
           </DialogContent>
         </Dialog>
 
+        {/* DELETE DIALOG */}
         <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -607,7 +577,7 @@ const GenerateTimetable = () => {
                     const id = instructors[deleteIndex].id;
                     (async () => {
                       try {
-                        await apiFetch(`${API_BASE}/instructors`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+                        await apiFetch(`${API_BASE}/instructors?id=${id}`, { method: "DELETE" });
                         setInstructors((prev) => prev.filter((_, i) => i !== deleteIndex));
                         toast.success("Instructor deleted");
                       } catch (e) {

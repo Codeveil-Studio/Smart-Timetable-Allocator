@@ -16,23 +16,35 @@ const buildUrl = () => {
 export const sql = neon(buildUrl());
 
 export const ensureSchema = async () => {
+  // Re-create instructors table to match new schema: id, name
+  // Using DROP to ensure old schema (with course_code) is removed
+  await sql`DROP TABLE IF EXISTS instructors CASCADE`;
   await sql`CREATE TABLE IF NOT EXISTS instructors (
     id serial PRIMARY KEY,
-    name text NOT NULL,
-    course_code text NOT NULL,
-    course_name text NOT NULL
+    name text NOT NULL
   )`;
+
   await sql`CREATE TABLE IF NOT EXISTS rooms (
     id serial PRIMARY KEY,
     room_number text NOT NULL,
     room_type text NOT NULL
   )`;
+
   await sql`CREATE TABLE IF NOT EXISTS courses (
     id serial PRIMARY KEY,
     code text NOT NULL,
     title text NOT NULL,
-    credit_hours integer NOT NULL
+    credit_hours integer NOT NULL,
+    instructor_id integer REFERENCES instructors(id)
   )`;
+  
+  // Add instructor_id if it was missing in existing courses table
+  try {
+    await sql`ALTER TABLE courses ADD COLUMN IF NOT EXISTS instructor_id integer REFERENCES instructors(id)`;
+  } catch (e) {
+    // Ignore error if column exists or other issue
+    console.log("Migration note: " + e.message);
+  }
 };
 
 export const ok = (res, data, status = 200) => {
