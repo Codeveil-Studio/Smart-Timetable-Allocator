@@ -17,8 +17,7 @@ export const sql = neon(buildUrl());
 
 export const ensureSchema = async () => {
   // Re-create instructors table to match new schema: id, name
-  // Using DROP to ensure old schema (with course_code) is removed
-  await sql`DROP TABLE IF EXISTS instructors CASCADE`;
+  // Removed DROP TABLE to persist data
   await sql`CREATE TABLE IF NOT EXISTS instructors (
     id serial PRIMARY KEY,
     name text NOT NULL

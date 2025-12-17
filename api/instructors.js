@@ -18,10 +18,15 @@ export default async function handler(req, res) {
 
     if (req.method === "POST") {
       const body = parseBody(req);
-      const { name } = body;
+      const { name, courseId } = body;
       if (!name) return error(res, "Name is required", 400);
 
       const [row] = await sql`INSERT INTO instructors (name) VALUES (${name}) RETURNING *`;
+      
+      if (courseId) {
+        await sql`UPDATE courses SET instructor_id = ${row.id} WHERE id = ${courseId}`;
+      }
+
       return ok(res, row, 201);
     }
 

@@ -8,6 +8,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/components/ui/sonner";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -35,6 +39,8 @@ const GenerateTimetable = () => {
   // Instructors State
   const [instructors, setInstructors] = useState<{ id: number; name: string }[]>([]);
   const [newInstructorName, setNewInstructorName] = useState("");
+  const [newInstructorCourseId, setNewInstructorCourseId] = useState<number | null>(null);
+  const [comboboxOpen, setComboboxOpen] = useState(false);
 
   // Rooms State
   const [rooms, setRooms] = useState<{ id: number; roomNumber: string; roomType: string }[]>([]);
@@ -107,45 +113,54 @@ const GenerateTimetable = () => {
                       <tr className="bg-muted">
                         <th className="border border-border p-3 text-left font-semibold w-[80px]">ID</th>
                         <th className="border border-border p-3 text-left font-semibold">Instructor Name</th>
+                        <th className="border border-border p-3 text-left font-semibold">Course(s)</th>
                         <th className="border border-border p-2 text-left font-semibold w-[140px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {instructors.map((inst, idx) => (
-                        <tr key={`${inst.id}-${idx}`} className="hover:bg-muted/30 transition-colors">
-                          <td className="border border-border p-3">{inst.id}</td>
-                          <td className="border border-border p-3">{inst.name}</td>
-                          <td className="border border-border p-2 w-[140px] whitespace-nowrap">
-                            <div className="flex gap-1">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="px-2"
-                                onClick={() => {
-                                  setEditType("instructor");
-                                  setEditIndex(idx);
-                                  setEditInstructor({ name: inst.name });
-                                  setEditOpen(true);
-                                }}
-                              >
-                                Edit
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="px-2"
-                                onClick={() => {
-                                  setDeleteType("instructor");
-                                  setDeleteIndex(idx);
-                                  setDeleteOpen(true);
-                                }}
-                              >
-                                Delete
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {instructors.map((inst, idx) => {
+                        const assignedCourses = courses
+                          .filter(c => c.instructorId === inst.id)
+                          .map(c => c.title)
+                          .join(", ");
+
+                        return (
+                          <tr key={`${inst.id}-${idx}`} className="hover:bg-muted/30 transition-colors">
+                            <td className="border border-border p-3">{inst.id}</td>
+                            <td className="border border-border p-3">{inst.name}</td>
+                            <td className="border border-border p-3">{assignedCourses || "-"}</td>
+                            <td className="border border-border p-2 w-[140px] whitespace-nowrap">
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="px-2"
+                                  onClick={() => {
+                                    setEditType("instructor");
+                                    setEditIndex(idx);
+                                    setEditInstructor({ name: inst.name });
+                                    setEditOpen(true);
+                                  }}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="px-2"
+                                  onClick={() => {
+                                    setDeleteType("instructor");
+                                    setDeleteIndex(idx);
+                                    setDeleteOpen(true);
+                                  }}
+                                >
+                                  Delete
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -154,20 +169,87 @@ const GenerateTimetable = () => {
                     <Label>Instructor Name</Label>
                     <Input value={newInstructorName} onChange={(e) => setNewInstructorName(e.target.value)} placeholder="e.g., Dr. Ali" />
                   </div>
-                  <div className="flex items-end">
+                  <div className="space-y-2">
+                    <Label>Assign Course</Label>
+                    <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={comboboxOpen}
+                          className="w-full justify-between"
+                        >
+                          {newInstructorCourseId
+                            ? courses.find((c) => c.id === newInstructorCourseId)?.title
+                            : "Select course..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0">
+                        <Command>
+                          <CommandInput placeholder="Search course..." />
+                          <CommandList>
+                            <CommandEmpty>No course found.</CommandEmpty>
+                            <CommandGroup>
+                              {courses.map((course) => (
+                                <CommandItem
+                                  key={course.id}
+                                  value={course.title} // Search by title
+                                  onSelect={() => {
+                                    setNewInstructorCourseId(course.id === newInstructorCourseId ? null : course.id);
+                                    setComboboxOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      newInstructorCourseId === course.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {course.code} - {course.title}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="flex items-end md:col-span-2 lg:col-span-1">
                     <Button
                       variant="outline"
                       className="w-full"
                       onClick={() => {
-                        if (!newInstructorName) return;
+                        if (!newInstructorName) {
+                          toast.error("Validation Error", { description: "Instructor name is required" });
+                          return;
+                        }
+                        if (!newInstructorCourseId) {
+                          toast.error("Validation Error", { description: "Assigning a course is mandatory" });
+                          return;
+                        }
+
+                        // Check if course is already assigned
+                        const selectedCourse = courses.find(c => c.id === newInstructorCourseId);
+                        if (selectedCourse?.instructorId) {
+                          toast.error("Validation Error", { description: "This course has already been allocated choose another course" });
+                          return;
+                        }
+
                         (async () => {
                           try {
                             const row = (await apiFetch(`${API_BASE}/instructors`, {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ name: newInstructorName }),
+                              body: JSON.stringify({ 
+                                name: newInstructorName,
+                                courseId: newInstructorCourseId 
+                              }),
                             })) as { id: number; name: string };
-                            setInstructors((prev) => [...prev, { id: row.id, name: row.name }]);
+                            
+                            // Refresh all data because courses might have been updated
+                            await loadData();
+                            
                             toast.success("Instructor added", { description: row.name });
                           } catch (e) {
                             const msg = e instanceof Error ? e.message : "Failed to add instructor";
@@ -175,6 +257,7 @@ const GenerateTimetable = () => {
                           }
                         })();
                         setNewInstructorName("");
+                        setNewInstructorCourseId(null);
                       }}
                     >
                       Add Instructor
@@ -579,6 +662,8 @@ const GenerateTimetable = () => {
                       try {
                         await apiFetch(`${API_BASE}/instructors?id=${id}`, { method: "DELETE" });
                         setInstructors((prev) => prev.filter((_, i) => i !== deleteIndex));
+                        // Reload data in case courses need to update (though instructor_id FK might set to null or fail, handled in API)
+                        await loadData();
                         toast.success("Instructor deleted");
                       } catch (e) {
                         const msg = e instanceof Error ? e.message : "Failed to delete instructor";
@@ -589,7 +674,7 @@ const GenerateTimetable = () => {
                     const id = rooms[deleteIndex].id;
                     (async () => {
                       try {
-                        await apiFetch(`${API_BASE}/rooms`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+                        await apiFetch(`${API_BASE}/rooms?id=${id}`, { method: "DELETE" });
                         setRooms((prev) => prev.filter((_, i) => i !== deleteIndex));
                         toast.success("Room deleted");
                       } catch (e) {
@@ -601,7 +686,7 @@ const GenerateTimetable = () => {
                     const id = courses[deleteIndex].id;
                     (async () => {
                       try {
-                        await apiFetch(`${API_BASE}/courses`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+                        await apiFetch(`${API_BASE}/courses?id=${id}`, { method: "DELETE" });
                         setCourses((prev) => prev.filter((_, i) => i !== deleteIndex));
                         toast.success("Course deleted");
                       } catch (e) {
