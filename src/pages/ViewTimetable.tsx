@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -32,12 +33,15 @@ interface TimetableEntry {
   class: string;
   course: string;
   room: string;
+  roomType?: string;
+  isLab?: boolean;
   day: string;
   startTime: string; // "08:30"
   endTime: string;
 }
 
 const ViewTimetable = () => {
+  const location = useLocation();
   const [selectedSemester, setSelectedSemester] = useState<string>("Spring");
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [timetableData, setTimetableData] = useState<TimetableEntry[]>([]);
@@ -57,14 +61,15 @@ const ViewTimetable = () => {
     }
   }, [selectedSemester, classOptions, selectedClass]);
 
-  const fetchTimetable = async () => {
-    if (!selectedClass) {
+  const fetchTimetable = async (classNameOverride?: string) => {
+    const targetClass = typeof classNameOverride === 'string' ? classNameOverride : selectedClass;
+    if (!targetClass) {
       toast.error("Please select a class");
       return;
     }
     setLoading(true);
     try {
-      const data = await apiFetch(`${API_BASE}/timetable/${selectedClass}`);
+      const data = await apiFetch(`${API_BASE}/timetable/${targetClass}`);
       setTimetableData(data as TimetableEntry[]);
       toast.success("Timetable loaded");
     } catch (e: any) {
@@ -75,6 +80,20 @@ const ViewTimetable = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (location.state?.semester) {
+      setSelectedSemester(location.state.semester);
+    }
+    if (location.state?.className) {
+      setSelectedClass(location.state.className);
+      fetchTimetable(location.state.className);
+      // Clear state so it doesn't re-run on refresh if we don't want it to, 
+      // but strictly speaking react-router state persists. 
+      // We can leave it, or clear it. Leaving it is fine for now.
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const timeSlots = ["08:30", "09:30", "10:30", "11:30", "12:30", "13:30", "14:30", "15:30", "16:30", "17:30"];
   const displayTimeSlots = ["8:30 AM", "9:30 AM", "10:30 AM", "11:30 AM", "12:30 PM", "1:30 PM", "2:30 PM", "3:30 PM", "4:30 PM", "5:30 PM"];
@@ -122,7 +141,7 @@ const ViewTimetable = () => {
           </div>
 
           <div className="flex items-end gap-2">
-            <Button className="flex-1" onClick={fetchTimetable} disabled={loading || !selectedClass}>
+            <Button className="flex-1" onClick={() => fetchTimetable()} disabled={loading || !selectedClass}>
               {loading ? "Loading..." : "View Timetable"}
             </Button>
           </div>
@@ -164,9 +183,10 @@ const ViewTimetable = () => {
                   return (
                     <td key={slotIdx} className="border border-border p-2 h-24 align-top">
                       {entry ? (
-                        <div className="bg-primary/10 p-2 rounded-md h-full text-xs">
-                          <div className="font-bold text-primary">{entry.course}</div>
-                          <div className="text-muted-foreground mt-1">{entry.room}</div>
+                        <div className={`p-2 rounded-md h-full text-xs ${entry.isLab ? "bg-orange-100 text-orange-800" : "bg-primary/10 text-foreground"}`}>
+                          <div className="font-bold">{entry.course}</div>
+                          <div className="text-muted-foreground mt-1">{entry.room} ({entry.roomType})</div>
+                          {entry.isLab && <div className="text-[10px] font-bold mt-1">LAB</div>}
                         </div>
                       ) : null}
                     </td>

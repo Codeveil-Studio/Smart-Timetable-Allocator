@@ -59,6 +59,7 @@ namespace SmartScheduleBackend.Services
                 .ToListAsync();
 
             var allSlots = await _context.TimeSlots
+                .Where(t => !request.OffDays.Contains(t.Day))
                 .OrderBy(t => t.Day) // Group by Day implicitly by sorting
                 .ThenBy(t => t.StartTime)
                 .ToListAsync();
@@ -93,38 +94,46 @@ namespace SmartScheduleBackend.Services
                 var usedDays = new HashSet<string>();
                 int instructorId = course.InstructorId!.Value;
 
-                // Try to allocate
-                while (remainingCredits > 0)
+                if (course.IsLab)
                 {
-                    bool allocated = false;
-
-                    // Strategy:
-                    // 1. If credits >= 3, try Lab Room (3 slots)
-                    // 2. If credits >= 2, try Lecture Room (2 slots)
-                    // 3. Try Lecture Room (1 slot)
-
-                    // Priority 1: Lab (3 slots)
-                    if (remainingCredits >= 3 && !allocated)
+                    // LAB COURSE: Must be Lab Room, Consecutive Slots = CreditHours
+                    var labRooms = rooms.Where(r => r.RoomType.Equals("Lab", StringComparison.OrdinalIgnoreCase)).ToList();
+                    if (!labRooms.Any())
                     {
-                        allocated = TryAllocateBlock(3, "Lab", course, instructorId, academicClass.Id, rooms, allSlots, usedDays, globalTimetable, ref remainingCredits);
+                         throw new Exception("Select Lab Room Number for Lab course");
                     }
 
-                    // Priority 2: Lecture (2 slots)
-                    if (remainingCredits >= 2 && !allocated)
-                    {
-                         allocated = TryAllocateBlock(2, "Lecture", course, instructorId, academicClass.Id, rooms, allSlots, usedDays, globalTimetable, ref remainingCredits);
-                    }
-
-                    // Priority 3: Lecture (1 slot)
-                    if (remainingCredits >= 1 && !allocated)
-                    {
-                         allocated = TryAllocateBlock(1, "Lecture", course, instructorId, academicClass.Id, rooms, allSlots, usedDays, globalTimetable, ref remainingCredits);
-                    }
+                    bool allocated = TryAllocateBlock(course.CreditHours, "Lab", course, instructorId, academicClass.Id, rooms, allSlots, usedDays, globalTimetable, ref remainingCredits);
 
                     if (!allocated)
                     {
-                        // Could not find a slot for this course part
-                        break; 
+                        throw new Exception($"Could not schedule Lab course '{course.Title}' ({course.CreditHours} hours) consecutively in a Lab room.");
+                    }
+                }
+                else
+                {
+                    // THEORY COURSE: Lecture Room (Not Lab), Can be split
+                    while (remainingCredits > 0)
+                    {
+                        bool allocated = false;
+
+                        // Try 2-hour block if possible
+                        if (remainingCredits >= 2)
+                        {
+                            allocated = TryAllocateBlock(2, "Lecture", course, instructorId, academicClass.Id, rooms, allSlots, usedDays, globalTimetable, ref remainingCredits);
+                        }
+
+                        // Try 1-hour block if 2-hour failed or not needed
+                        if (!allocated)
+                        {
+                            allocated = TryAllocateBlock(1, "Lecture", course, instructorId, academicClass.Id, rooms, allSlots, usedDays, globalTimetable, ref remainingCredits);
+                        }
+
+                        if (!allocated)
+                        {
+                            // Could not find a slot for this course part
+                             throw new Exception($"Could not schedule Theory course '{course.Title}' for remaining {remainingCredits} hours.");
+                        }
                     }
                 }
             }
@@ -138,12 +147,12 @@ namespace SmartScheduleBackend.Services
             List<Timetable> globalTimetable, ref int remainingCredits)
         {
             var compatibleRooms = rooms.Where(r => 
-                (roomType == "Lab" ? r.RoomType == "Lab" : r.RoomType != "Lab") 
+                (roomType == "Lab" ? r.RoomType.Equals("Lab", StringComparison.OrdinalIgnoreCase) : !r.RoomType.Equals("Lab", StringComparison.OrdinalIgnoreCase)) 
             ).ToList();
 
             if (roomType == "Lecture") 
             {
-                compatibleRooms = rooms.Where(r => r.RoomType != "Lab").ToList();
+                compatibleRooms = rooms.Where(r => !r.RoomType.Equals("Lab", StringComparison.OrdinalIgnoreCase)).ToList();
             }
 
             // Iterate days to find a valid block
@@ -241,6 +250,8 @@ namespace SmartScheduleBackend.Services
                              Class = t.AcademicClass.Name,
                              Course = t.Course.Title,
                              Room = t.Room.RoomNumber,
+                             RoomType = t.Room.RoomType,
+                             IsLab = t.Course.IsLab,
                              Day = t.TimeSlot.Day,
                              StartTime = t.TimeSlot.StartTime.ToString(@"hh\:mm"),
                              EndTime = t.TimeSlot.EndTime.ToString(@"hh\:mm")

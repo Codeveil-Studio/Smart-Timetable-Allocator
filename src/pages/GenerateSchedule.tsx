@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -49,9 +51,13 @@ interface Instructor {
 }
 
 const GenerateSchedule = () => {
+  const navigate = useNavigate();
   const [selectedSemester, setSelectedSemester] = useState<string>("");
   const [selectedClass, setSelectedClass] = useState<string>("");
+  const [offDays, setOffDays] = useState<string[]>([]);
   
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+
   // Data State
   const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
   const [availableRooms, setAvailableRooms] = useState<Room[]>([]);
@@ -147,10 +153,12 @@ const GenerateSchedule = () => {
                 body: JSON.stringify({
                   className: selectedClass,
                   courseIds: courses.map(c => c.id),
-                  roomIds: rooms.map(r => r.id)
+                  roomIds: rooms.map(r => r.id),
+                  offDays: offDays
                 })
               });
               toast.success("Timetable generated successfully!");
+              navigate("/view", { state: { semester: selectedSemester, className: selectedClass } });
             } catch (e: any) {
               console.error(e);
               toast.error(e.message || "Failed to generate timetable");
@@ -190,6 +198,30 @@ const GenerateSchedule = () => {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Off Days</Label>
+            <div className="flex flex-wrap gap-3 pt-2">
+              {days.map((day) => (
+                <div key={day} className="flex items-center space-x-2">
+                  <Checkbox 
+                    id={`off-${day}`} 
+                    checked={offDays.includes(day)}
+                    onCheckedChange={(checked) => {
+                      if (checked) setOffDays([...offDays, day]);
+                      else setOffDays(offDays.filter(d => d !== day));
+                    }}
+                  />
+                  <label 
+                    htmlFor={`off-${day}`} 
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    {day.slice(0, 3)}
+                  </label>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
