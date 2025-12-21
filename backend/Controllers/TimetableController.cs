@@ -33,10 +33,34 @@ namespace SmartScheduleBackend.Controllers
         }
 
         [HttpGet("{className}")]
-        public async Task<IActionResult> GetTimetable(string className)
+        public async Task<IActionResult> GetTimetable(string className, [FromQuery] int? version)
         {
-            var result = await _service.GetTimetable(className);
+            var result = await _service.GetTimetable(className, version);
             return Ok(result);
+        }
+
+        [HttpGet("{className}/versions")]
+        public async Task<IActionResult> GetVersions(string className)
+        {
+            var result = await _service.GetVersions(className);
+            return Ok(result);
+        }
+
+        [HttpPost("regenerate/{className}")]
+        public async Task<IActionResult> Regenerate(string className)
+        {
+            try
+            {
+                var success = await _service.RegenerateTimetable(className);
+                if (success)
+                    return Ok(new { message = "Timetable regenerated successfully" });
+                else
+                    return BadRequest(new { error = "Could not regenerate timetable" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
         }
     }
 }

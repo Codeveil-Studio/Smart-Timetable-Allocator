@@ -27,5 +27,8 @@ namespace SmartScheduleBackend.Models
         [Column("time_slot_id")]
         public int TimeSlotId { get; set; }
         public TimeSlot? TimeSlot { get; set; }
+
+        [Column("version")]
+        public int Version { get; set; } = 1;
     }
 }

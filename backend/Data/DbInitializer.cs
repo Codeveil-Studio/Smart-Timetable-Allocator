@@ -40,9 +40,22 @@ namespace SmartScheduleBackend.Data
                     course_id integer REFERENCES courses(id),
                     instructor_id integer REFERENCES instructors(id),
                     room_id integer REFERENCES rooms(id),
-                    time_slot_id integer REFERENCES time_slot(id)
+                    time_slot_id integer REFERENCES time_slot(id),
+                    version integer DEFAULT 1
                 );
             ";
+
+            // Add version column if it doesn't exist (migration-like behavior)
+            var checkColSql = @"
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='timetable' AND column_name='version') THEN
+                        ALTER TABLE timetable ADD COLUMN version integer DEFAULT 1;
+                    END IF;
+                END $$;
+            ";
+            context.Database.ExecuteSqlRaw(checkColSql);
 
             context.Database.ExecuteSqlRaw(sql);
         }

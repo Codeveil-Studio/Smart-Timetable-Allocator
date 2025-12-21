@@ -35,7 +35,7 @@ namespace SmartScheduleBackend.Services
             await _context.SaveChangesAsync();
         }
 
-        public async Task<bool> GenerateTimetable(GenerateRequest request)
+        public async Task<bool> GenerateTimetable(GenerateRequest request, bool isRegeneration = false)
         {
             await EnsureTimeSlots();
 
@@ -46,6 +46,38 @@ namespace SmartScheduleBackend.Services
                 academicClass = new AcademicClass { Name = request.ClassName };
                 _context.AcademicClasses.Add(academicClass);
                 await _context.SaveChangesAsync();
+            }
+
+            // DETERMINE VERSION
+            int newVersion = 1;
+            if (isRegeneration)
+            {
+                var maxVer = await _context.Timetables
+                    .Where(t => t.AcademicClassId == academicClass.Id)
+                    .MaxAsync(t => (int?)t.Version) ?? 0;
+                newVersion = maxVer + 1;
+            }
+            else
+            {
+                // If not strictly regeneration but generating fresh, we might still want to version up 
+                // OR wipe existing. The user said "add a new col... not overwriting the previous one".
+                // So actually, standard generation should probably ALSO increment version instead of wiping.
+                // But let's follow the standard "Generate" vs "Regenerate".
+                // If the user clicks "Generate" on the first screen, they might expect a fresh start.
+                // However, the prompt implies "Regenerate" is the special action.
+                // Let's assume "Generate" on main screen wipes everything (legacy behavior) OR increments.
+                // Given "I dont want to lose the previous timetable", safe bet is ALWAYS increment version.
+                
+                var maxVer = await _context.Timetables
+                    .Where(t => t.AcademicClassId == academicClass.Id)
+                    .MaxAsync(t => (int?)t.Version) ?? 0;
+                
+                // If maxVer is 0, new is 1. If maxVer is 5, new is 6.
+                // BUT, if the user explicitly wants to "overwrite" (like the original logic), 
+                // we should probably stick to the requested "Regenerate" flow for versioning.
+                // However, mixing "Overwrite" and "Versioned" modes is confusing.
+                // Let's make EVERYTHING versioned. It's safer.
+                newVersion = maxVer + 1;
             }
 
             // 2. Fetch Data
@@ -64,22 +96,65 @@ namespace SmartScheduleBackend.Services
                 .ThenBy(t => t.StartTime)
                 .ToListAsync();
 
-            // 3. Clear existing entries for this class
-            var existing = await _context.Timetables.Where(t => t.AcademicClassId == academicClass.Id).ToListAsync();
-            _context.Timetables.RemoveRange(existing);
-            await _context.SaveChangesAsync();
+            // 3. NO LONGER Clear existing entries. We append new version.
+            // var existing = await _context.Timetables.Where(t => t.AcademicClassId == academicClass.Id).ToListAsync();
+            // _context.Timetables.RemoveRange(existing);
+            // await _context.SaveChangesAsync();
 
             // 4. Load Global State
-            var globalTimetable = await _context.Timetables.ToListAsync();
+            // CRITICAL: We need to know what to "collide" with.
+            // "Ignoring the same class timetable while respecting the other class timetable"
+            // For other classes, we should probably respect their LATEST version (or active version).
+            // For THIS class, we ignore ALL previous versions.
+            
+            // Get latest version for every OTHER class
+            var otherClassesLatestVersions = await _context.Timetables
+                .Where(t => t.AcademicClassId != academicClass.Id)
+                .GroupBy(t => t.AcademicClassId)
+                .Select(g => new { ClassId = g.Key, MaxVersion = g.Max(t => t.Version) })
+                .ToListAsync();
+
+            var latestVersionsMap = otherClassesLatestVersions.ToDictionary(x => x.ClassId, x => x.MaxVersion);
+
+            // Fetch conflicts: All timetables where (Class != Current) AND (Version == Latest for that class)
+            // This is complex to do in one query efficiently.
+            // Easier: Fetch all timetables for other classes, then filter in memory (if dataset small) OR
+            // build a complex Where clause.
+            // Given typical scale, fetching all is okay, but filtering in DB is better.
+            
+            // Let's try to fetch all and filter in memory for simplicity/reliability first, 
+            // assuming school timetable isn't millions of rows.
+            var allTimetables = await _context.Timetables
+                .Include(t => t.AcademicClass) // For debugging if needed
+                .ToListAsync();
+
+            var globalTimetable = allTimetables
+                .Where(t => t.AcademicClassId != academicClass.Id && 
+                            (latestVersionsMap.ContainsKey(t.AcademicClassId) && t.Version == latestVersionsMap[t.AcademicClassId]))
+                .ToList();
+
+            // Also, we need to track what we add LOCALLY in this session to prevent self-collision within the new version
+            var currentSessionTimetable = new List<Timetable>();
 
             // Helper to check availability
             bool IsSlotFree(TimeSlot slot, Room room, int instructorId, int classId)
             {
-                return !globalTimetable.Any(t =>
+                // Check against other classes' latest versions
+                if (globalTimetable.Any(t =>
+                    t.TimeSlotId == slot.Id &&
+                    (t.RoomId == room.Id ||
+                     t.InstructorId == instructorId)))
+                     return false;
+
+                // Check against what we've just scheduled in this transaction
+                if (currentSessionTimetable.Any(t =>
                     t.TimeSlotId == slot.Id &&
                     (t.RoomId == room.Id ||
                      t.InstructorId == instructorId ||
-                     t.AcademicClassId == classId)); 
+                     t.AcademicClassId == classId)))
+                     return false;
+
+                return true;
             }
 
             // 5. Allocation Logic
@@ -103,7 +178,7 @@ namespace SmartScheduleBackend.Services
                          throw new Exception("Select Lab Room Number for Lab course");
                     }
 
-                    bool allocated = TryAllocateBlock(course.CreditHours, "Lab", course, instructorId, academicClass.Id, rooms, allSlots, usedDays, globalTimetable, ref remainingCredits);
+                    bool allocated = TryAllocateBlock(course.CreditHours, "Lab", course, instructorId, academicClass.Id, rooms, allSlots, usedDays, globalTimetable, currentSessionTimetable, ref remainingCredits);
 
                     if (!allocated)
                     {
@@ -120,13 +195,13 @@ namespace SmartScheduleBackend.Services
                         // Try 2-hour block if possible
                         if (remainingCredits >= 2)
                         {
-                            allocated = TryAllocateBlock(2, "Lecture", course, instructorId, academicClass.Id, rooms, allSlots, usedDays, globalTimetable, ref remainingCredits);
+                            allocated = TryAllocateBlock(2, "Lecture", course, instructorId, academicClass.Id, rooms, allSlots, usedDays, globalTimetable, currentSessionTimetable, ref remainingCredits);
                         }
 
                         // Try 1-hour block if 2-hour failed or not needed
                         if (!allocated)
                         {
-                            allocated = TryAllocateBlock(1, "Lecture", course, instructorId, academicClass.Id, rooms, allSlots, usedDays, globalTimetable, ref remainingCredits);
+                            allocated = TryAllocateBlock(1, "Lecture", course, instructorId, academicClass.Id, rooms, allSlots, usedDays, globalTimetable, currentSessionTimetable, ref remainingCredits);
                         }
 
                         if (!allocated)
@@ -138,13 +213,20 @@ namespace SmartScheduleBackend.Services
                 }
             }
 
+            // Save new entries with new version
+            foreach(var t in currentSessionTimetable)
+            {
+                t.Version = newVersion;
+                _context.Timetables.Add(t);
+            }
+            
             await _context.SaveChangesAsync();
             return true;
         }
 
         private bool TryAllocateBlock(int blockSize, string roomType, Course course, int instructorId, int classId, 
             List<Room> rooms, List<TimeSlot> allSlots, HashSet<string> usedDays, 
-            List<Timetable> globalTimetable, ref int remainingCredits)
+            List<Timetable> globalTimetable, List<Timetable> currentSessionTimetable, ref int remainingCredits)
         {
             var compatibleRooms = rooms.Where(r => 
                 (roomType == "Lab" ? r.RoomType.Equals("Lab", StringComparison.OrdinalIgnoreCase) : !r.RoomType.Equals("Lab", StringComparison.OrdinalIgnoreCase)) 
@@ -188,7 +270,17 @@ namespace SmartScheduleBackend.Services
                         bool roomFree = true;
                         foreach (var slot in blockSlots)
                         {
+                            // Check Global (Other classes)
                             if (globalTimetable.Any(t => 
+                                t.TimeSlotId == slot.Id && 
+                                (t.RoomId == room.Id || t.InstructorId == instructorId)))
+                            {
+                                roomFree = false;
+                                break;
+                            }
+                            
+                            // Check Local (Current class new version)
+                            if (currentSessionTimetable.Any(t => 
                                 t.TimeSlotId == slot.Id && 
                                 (t.RoomId == room.Id || t.InstructorId == instructorId || t.AcademicClassId == classId)))
                             {
@@ -210,8 +302,9 @@ namespace SmartScheduleBackend.Services
                                     RoomId = room.Id,
                                     TimeSlotId = slot.Id
                                 };
-                                _context.Timetables.Add(entry);
-                                globalTimetable.Add(entry); // Update local state
+                                // Don't add to context yet, wait until all success
+                                // But we need to check collisions, so add to local list
+                                currentSessionTimetable.Add(entry); 
                             }
                             
                             remainingCredits -= blockSize;
@@ -225,15 +318,37 @@ namespace SmartScheduleBackend.Services
             return false;
         }
 
-        public async Task<List<object>> GetTimetable(string className)
+        public async Task<List<object>> GetTimetable(string className, int? version = null)
         {
-             var result = await _context.Timetables
-                .Where(t => t.AcademicClass.Name == className)
+             var query = _context.Timetables
+                .Where(t => t.AcademicClass.Name == className);
+
+             if (version.HasValue)
+             {
+                 query = query.Where(t => t.Version == version.Value);
+             }
+             else
+             {
+                 // Default to latest version
+                 // Subquery to find max version for this class
+                 // Note: EF Core might struggle with this in one go if not careful.
+                 // Easier: Get max version first.
+                 var maxVer = await _context.Timetables
+                    .Where(t => t.AcademicClass.Name == className)
+                    .MaxAsync(t => (int?)t.Version);
+                 
+                 if (maxVer.HasValue)
+                 {
+                     query = query.Where(t => t.Version == maxVer.Value);
+                 }
+             }
+
+             var result = await query
                 .Include(t => t.AcademicClass)
                 .Include(t => t.Course)
                 .Include(t => t.Room)
                 .Include(t => t.TimeSlot)
-                .OrderBy(t => t.TimeSlot.Day) // String sort might be wrong (Fri < Mon), need custom sort
+                .OrderBy(t => t.TimeSlot.Day) 
                 .ThenBy(t => t.TimeSlot.StartTime)
                 .ToListAsync();
             
@@ -254,8 +369,56 @@ namespace SmartScheduleBackend.Services
                              IsLab = t.Course.IsLab,
                              Day = t.TimeSlot.Day,
                              StartTime = t.TimeSlot.StartTime.ToString(@"hh\:mm"),
-                             EndTime = t.TimeSlot.EndTime.ToString(@"hh\:mm")
+                             EndTime = t.TimeSlot.EndTime.ToString(@"hh\:mm"),
+                             Version = t.Version // Include Version in output
                          }).Cast<object>().ToList();
+        }
+
+        public async Task<List<int>> GetVersions(string className)
+        {
+            return await _context.Timetables
+                .Where(t => t.AcademicClass.Name == className)
+                .Select(t => t.Version)
+                .Distinct()
+                .OrderByDescending(v => v)
+                .ToListAsync();
+        }
+        
+        public async Task<bool> RegenerateTimetable(string className)
+        {
+            // 1. Get Class ID
+            var academicClass = await _context.AcademicClasses.FirstOrDefaultAsync(a => a.Name == className);
+            if (academicClass == null) throw new Exception("Class not found");
+
+            // 2. Get Latest Version Constraints (Courses, Rooms) from existing data
+            var maxVer = await _context.Timetables
+                    .Where(t => t.AcademicClassId == academicClass.Id)
+                    .MaxAsync(t => (int?)t.Version);
+
+            if (!maxVer.HasValue) throw new Exception("No existing timetable to regenerate from");
+
+            var existingEntries = await _context.Timetables
+                .Where(t => t.AcademicClassId == academicClass.Id && t.Version == maxVer.Value)
+                .ToListAsync();
+
+            var courseIds = existingEntries.Select(t => t.CourseId).Distinct().ToList();
+            var roomIds = existingEntries.Select(t => t.RoomId).Distinct().ToList();
+
+            // We assume "Off Days" are none for regeneration, as we can't infer them reliably.
+            // Or we could check which days are completely empty in the previous version?
+            // Risk: If a day was full but just happened to have no classes scheduled due to conflicts? Unlikely.
+            // Risk: If a day was explicitly OFF, we re-enable it. This is a trade-off.
+            // Let's assume NO off days for now.
+
+            var request = new GenerateRequest
+            {
+                ClassName = className,
+                CourseIds = courseIds,
+                RoomIds = roomIds,
+                OffDays = new List<string>() 
+            };
+
+            return await GenerateTimetable(request, isRegeneration: true);
         }
     }
 }
