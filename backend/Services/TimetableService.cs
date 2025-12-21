@@ -193,6 +193,8 @@ namespace SmartScheduleBackend.Services
 
             var daysOrder = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday" };
             
+            var generationTime = DateTime.UtcNow;
+
             foreach (var course in courses)
             {
                 int remainingCredits = course.CreditHours;
@@ -244,11 +246,12 @@ namespace SmartScheduleBackend.Services
             }
 
             // Save new entries with new version
-            foreach(var t in currentSessionTimetable)
-            {
-                t.Version = newVersion;
-                _context.Timetables.Add(t);
-            }
+             foreach(var t in currentSessionTimetable)
+             {
+                 t.Version = newVersion;
+                 t.CreatedAt = generationTime;
+                 _context.Timetables.Add(t);
+             }
             
             await _context.SaveChangesAsync();
             return true;
@@ -346,6 +349,49 @@ namespace SmartScheduleBackend.Services
             }
 
             return false;
+        }
+
+        public async Task<bool> DeleteTimetable(string className)
+        {
+            var academicClass = await _context.AcademicClasses.FirstOrDefaultAsync(a => a.Name == className);
+            if (academicClass == null) return false;
+
+            // 1. Delete all timetable entries
+            var timetables = await _context.Timetables.Where(t => t.AcademicClassId == academicClass.Id).ToListAsync();
+            _context.Timetables.RemoveRange(timetables);
+
+            // 2. Delete off-days preferences
+            var offDays = await _context.ClassOffDays.Where(d => d.AcademicClassId == academicClass.Id).ToListAsync();
+            _context.ClassOffDays.RemoveRange(offDays);
+
+            // 3. Delete the class itself
+            _context.AcademicClasses.Remove(academicClass);
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<List<object>> GetTimetableSummaries()
+        {
+            var data = await _context.Timetables
+                .Include(t => t.AcademicClass)
+                .GroupBy(t => t.AcademicClass.Name)
+                .Select(g => new
+                {
+                    ClassName = g.Key,
+                    MaxVersion = g.Max(t => t.Version),
+                    CreatedAt = g.Max(t => t.CreatedAt) // Assuming latest entry timestamp
+                })
+                .ToListAsync();
+            
+            // Generate sequential ID in memory or using index
+            return data.Select((d, index) => new
+            {
+                Id = index + 1,
+                ClassName = d.ClassName,
+                CreatedAt = d.CreatedAt == default ? DateTime.Now : d.CreatedAt, // Fallback if old data is null
+                Versions = d.MaxVersion
+            }).Cast<object>().ToList();
         }
 
         public async Task<List<object>> GetTimetable(string className, int? version = null)

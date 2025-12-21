@@ -4,8 +4,19 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Download, FileSpreadsheet, Filter } from "lucide-react";
+import { Download, FileSpreadsheet, Eye, RefreshCw, X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -40,77 +51,83 @@ interface TimetableEntry {
   endTime: string;
 }
 
+interface TimetableSummary {
+  id: number;
+  className: string;
+  createdAt: string;
+  versions: number;
+}
+
 const ViewTimetable = () => {
   const location = useLocation();
-  const [selectedSemester, setSelectedSemester] = useState<string>("Spring");
+  const [summaries, setSummaries] = useState<TimetableSummary[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("");
   const [selectedVersion, setSelectedVersion] = useState<string>("");
   const [availableVersions, setAvailableVersions] = useState<number[]>([]);
   const [timetableData, setTimetableData] = useState<TimetableEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [classToDelete, setClassToDelete] = useState<string | null>(null);
 
-  // Compute Class Options based on Semester
-  let classOptions: string[] = [];
-  if (selectedSemester === "Fall") {
-    classOptions = [1, 3, 5, 7].flatMap(n => ["A", "B", "C"].map(s => `${n}-${s}`));
-  } else if (selectedSemester === "Spring") {
-    classOptions = [2, 4, 6, 8].flatMap(n => ["A", "B", "C"].map(s => `${n}-${s}`));
-  }
-
+  // Fetch summaries on mount
   useEffect(() => {
-    if (selectedClass && !classOptions.includes(selectedClass)) {
-      setSelectedClass("");
-      setAvailableVersions([]);
-      setSelectedVersion("");
-    } else if (selectedClass) {
-      // Fetch versions when class changes
-      fetchVersions(selectedClass);
+    fetchSummaries();
+  }, []);
+
+  const fetchSummaries = async () => {
+    try {
+      const data = await apiFetch(`${API_BASE}/timetable/summaries`);
+      setSummaries(data as TimetableSummary[]);
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to load timetable list");
     }
-  }, [selectedSemester, classOptions, selectedClass]);
+  };
 
   const fetchVersions = async (className: string) => {
     try {
       const versions = await apiFetch(`${API_BASE}/timetable/${className}/versions`) as number[];
       setAvailableVersions(versions);
       if (versions.length > 0) {
-        // Default to latest version if not already set or invalid
-        // If we just loaded, we probably want the latest.
-        // If we are regenerating, we'll manually update.
         setSelectedVersion(versions[0].toString());
+        return versions[0].toString();
       } else {
         setSelectedVersion("");
+        return null;
       }
     } catch (e) {
       console.error("Failed to fetch versions", e);
       setAvailableVersions([]);
+      return null;
     }
   };
 
-  const fetchTimetable = async (classNameOverride?: string, versionOverride?: string) => {
-    const targetClass = typeof classNameOverride === 'string' ? classNameOverride : selectedClass;
-    const targetVersion = typeof versionOverride === 'string' ? versionOverride : selectedVersion;
-    
-    if (!targetClass) {
-      toast.error("Please select a class");
-      return;
-    }
+  const fetchTimetable = async (className: string, version?: string) => {
     setLoading(true);
     setTimetableData([]);
     try {
-      let url = `${API_BASE}/timetable/${targetClass}`;
-      if (targetVersion) {
-        url += `?version=${targetVersion}`;
+      let url = `${API_BASE}/timetable/${className}`;
+      if (version) {
+        url += `?version=${version}`;
       }
       const data = await apiFetch(url);
       setTimetableData(data as TimetableEntry[]);
-      toast.success("Timetable loaded");
     } catch (e: any) {
       console.error(e);
       toast.error(e.message || "Failed to load timetable");
       setTimetableData([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleViewTimetable = async (className: string) => {
+    setSelectedClass(className);
+    setIsModalOpen(true);
+    const latestVersion = await fetchVersions(className);
+    if (latestVersion) {
+      fetchTimetable(className, latestVersion);
     }
   };
 
@@ -122,16 +139,13 @@ const ViewTimetable = () => {
         method: "POST"
       });
       toast.success("Timetable regenerated successfully!");
+      
+      // Refresh summaries to update version count/timestamp
+      fetchSummaries();
+
       // Refresh versions and fetch latest
-      await fetchVersions(selectedClass);
-      // We need to wait a bit for state to update or just explicitly fetch latest
-      // Ideally fetchVersions updates availableVersions, and we grab the first one (newest)
-      // Since setState is async, we can't rely on `availableVersions` immediately.
-      // But we know we just regenerated, so there should be a new version.
-      // Let's just re-fetch the timetable without version param (defaults to latest) 
-      // OR fetch versions again and pick top.
-      // For safety, let's just trigger a full refresh flow
       const versions = await apiFetch(`${API_BASE}/timetable/${selectedClass}/versions`) as number[];
+      setAvailableVersions(versions);
       if (versions.length > 0) {
          setSelectedVersion(versions[0].toString());
          fetchTimetable(selectedClass, versions[0].toString());
@@ -143,23 +157,19 @@ const ViewTimetable = () => {
     }
   };
 
-  useEffect(() => {
-    if (location.state?.semester) {
-      setSelectedSemester(location.state.semester);
+  const handleDelete = async () => {
+    if (!classToDelete) return;
+    try {
+      await apiFetch(`${API_BASE}/timetable/${classToDelete}`, { method: "DELETE" });
+      toast.success(`Timetable for ${classToDelete} deleted successfully`);
+      fetchSummaries();
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.message || "Failed to delete timetable");
+    } finally {
+      setClassToDelete(null);
     }
-    if (location.state?.className) {
-      const cls = location.state.className;
-      setSelectedClass(cls);
-      // We need to fetch versions first, then timetable
-      fetchVersions(cls).then(() => {
-         // After versions are fetched, fetch timetable (defaults to latest implicit or we can wait)
-         // Actually fetchTimetable handles optional version. If we don't pass it, backend gets latest.
-         fetchTimetable(cls); 
-      });
-      
-      window.history.replaceState({}, document.title);
-    }
-  }, [location.state]);
+  };
 
   const timeSlots = ["08:30", "09:30", "10:30", "11:30", "12:30", "13:30", "14:30", "15:30", "16:30", "17:30"];
   const displayTimeSlots = ["8:30 AM", "9:30 AM", "10:30 AM", "11:30 AM", "12:30 PM", "1:30 PM", "2:30 PM", "3:30 PM", "4:30 PM", "5:30 PM"];
@@ -169,133 +179,191 @@ const ViewTimetable = () => {
     return timetableData.find(t => t.day === day && t.startTime === startTime);
   };
 
+  // Handle auto-redirect from generation
+  useEffect(() => {
+    if (location.state?.className) {
+      handleViewTimetable(location.state.className);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
   return (
     <div className="animate-fade-in space-y-6">
-      {/* Filter Section */}
-      <Card className="p-6 shadow-soft-md">
-        <div className="flex items-center gap-4 mb-6">
-          <Filter className="w-5 h-5 text-primary" />
-          <h2 className="text-xl font-semibold text-foreground">Filter Timetables</h2>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="space-y-2">
-            <Label>Semester</Label>
-            <Select value={selectedSemester} onValueChange={(val) => {
-              setSelectedSemester(val);
-              setSelectedClass("");
-              setAvailableVersions([]);
-              setSelectedVersion("");
-            }}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Spring">Spring</SelectItem>
-                <SelectItem value="Fall">Fall</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold tracking-tight">Timetable Dashboard</h2>
+        <Button onClick={fetchSummaries} variant="outline" size="sm" className="gap-2">
+          <RefreshCw className="w-4 h-4" /> Refresh List
+        </Button>
+      </div>
 
-          <div className="space-y-2">
-            <Label>Class</Label>
-            <Select value={selectedClass} onValueChange={(val) => {
-              setSelectedClass(val);
-              setAvailableVersions([]);
-              setSelectedVersion("");
-            }} disabled={!selectedSemester}>
-              <SelectTrigger>
-                <SelectValue placeholder={!selectedSemester ? "Select Semester first" : "Select Class"} />
-              </SelectTrigger>
-              <SelectContent>
-                {classOptions.map((opt) => (
-                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-             <Label>Version</Label>
-             <Select value={selectedVersion} onValueChange={(val) => { setSelectedVersion(val); fetchTimetable(undefined, val); }} disabled={!selectedClass || availableVersions.length === 0}>
-               <SelectTrigger>
-                 <SelectValue placeholder="Latest" />
-               </SelectTrigger>
-               <SelectContent>
-                 {availableVersions.map((ver, index) => (
-                   <SelectItem key={ver} value={ver.toString()}>
-                     Version {ver} {index === 0 ? "(Latest)" : ""}
-                   </SelectItem>
-                 ))}
-               </SelectContent>
-             </Select>
-          </div>
-
-          <div className="flex items-end gap-2 col-span-1 md:col-span-4 lg:col-span-1">
-            <Button className="flex-1" onClick={() => fetchTimetable()} disabled={loading || !selectedClass}>
-              {loading ? "Loading..." : "View Timetable"}
-            </Button>
-            <Button variant="secondary" className="flex-1" onClick={handleRegenerate} disabled={loading || regenerating || !selectedClass}>
-              {regenerating ? "Regenerating..." : "Regenerate"}
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {/* Export Actions */}
-      <Card className="p-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-foreground">Timetable View: {selectedClass || "None"}</h3>
-        <div className="flex gap-3">
-          <Button variant="default" className="gap-2">
-            <Download className="w-4 h-4" />
-            Export to PDF
-          </Button>
-          <Button variant="outline" className="gap-2">
-            <FileSpreadsheet className="w-4 h-4" />
-            Export to Excel
-          </Button>
-        </div>
-      </Card>
-
-      {/* Timetable Display */}
-      <Card className="p-6 shadow-soft-md overflow-x-auto">
-        <table className="w-full border-collapse min-w-[1000px]">
-          <thead>
-            <tr className="bg-muted">
-              <th className="border border-border p-4 text-left font-semibold sticky left-0 bg-muted z-10">Day</th>
-              {displayTimeSlots.map((slot, i) => (
-                <th key={i} className="border border-border p-4 text-left font-semibold">{slot}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {days.map((day) => (
-              <tr key={day} className="hover:bg-muted/30 transition-colors">
-                <td className="border border-border p-4 font-semibold sticky left-0 bg-background z-10">{day}</td>
-                {timeSlots.map((slotTime, slotIdx) => {
-                  const entry = getEntry(day, slotTime);
-                  return (
-                    <td key={slotIdx} className="border border-border p-2 h-24 align-top">
-                      {entry ? (
-                        <div className={`p-2 rounded-md h-full text-xs ${entry.isLab ? "bg-orange-100 text-orange-800" : "bg-primary/10 text-foreground"}`}>
-                          <div className="font-bold">{entry.course}</div>
-                          <div className="text-muted-foreground mt-1">{entry.room} ({entry.roomType})</div>
-                          {entry.isLab && <div className="text-[10px] font-bold mt-1">LAB</div>}
-                        </div>
-                      ) : null}
-                    </td>
-                  );
-                })}
+      <Card className="shadow-soft-md overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-muted/50 text-muted-foreground uppercase text-xs">
+              <tr>
+                <th className="px-6 py-4 font-semibold">ID</th>
+                <th className="px-6 py-4 font-semibold">Class Name</th>
+                <th className="px-6 py-4 font-semibold">Created At</th>
+                <th className="px-6 py-4 font-semibold">Versions</th>
+                <th className="px-6 py-4 font-semibold text-right">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {timetableData.length === 0 && !loading && (
-          <div className="text-center py-8 text-muted-foreground">
-            No timetable data to display. Please select a class and click View.
-          </div>
-        )}
+            </thead>
+            <tbody className="divide-y divide-border">
+              {summaries.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
+                    No timetables found. Generate one first!
+                  </td>
+                </tr>
+              ) : (
+                summaries.map((summary) => (
+                  <tr key={summary.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-6 py-4 font-medium">{summary.id}</td>
+                    <td className="px-6 py-4 text-foreground font-semibold">{summary.className}</td>
+                    <td className="px-6 py-4 text-muted-foreground">
+                      {new Date(summary.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                        {summary.versions}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button size="sm" onClick={() => handleViewTimetable(summary.className)} className="gap-2">
+                          <Eye className="w-4 h-4" /> View
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => setClassToDelete(summary.className)} className="gap-2">
+                          <Trash2 className="w-4 h-4" /> Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!classToDelete} onOpenChange={(open) => !open && setClassToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deleting the timetable of <span className="font-bold text-foreground">{classToDelete}</span> will delete it permanently. 
+              This action cannot be reversed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Timetable Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-[95vw] w-full h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="p-6 border-b flex flex-row items-center justify-between space-y-0">
+            <div className="flex items-center gap-4">
+              <DialogTitle className="text-2xl font-bold">Timetable: {selectedClass}</DialogTitle>
+              <div className="flex items-center gap-2 ml-4">
+                <Select 
+                  value={selectedVersion} 
+                  onValueChange={(val) => { 
+                    setSelectedVersion(val); 
+                    fetchTimetable(selectedClass, val); 
+                  }}
+                  disabled={availableVersions.length === 0}
+                >
+                  <SelectTrigger className="w-[180px] h-9">
+                    <SelectValue placeholder="Select Version" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableVersions.map((ver, index) => (
+                      <SelectItem key={ver} value={ver.toString()}>
+                        Version {ver} {index === 0 ? "(Latest)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3 pr-8">
+              <Button variant="outline" size="sm" className="gap-2">
+                <Download className="w-4 h-4" /> PDF
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={handleRegenerate} 
+                disabled={regenerating}
+                className="gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} /> 
+                {regenerating ? "Regenerating..." : "Regenerate"}
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-auto p-6 bg-muted/10">
+            <Card className="shadow-sm overflow-hidden border-0">
+              <table className="w-full border-collapse min-w-[1000px]">
+                <thead>
+                  <tr className="bg-primary/5">
+                    <th className="border-b border-r p-4 text-left font-semibold sticky left-0 bg-background/95 backdrop-blur z-20 w-32">Day</th>
+                    {displayTimeSlots.map((slot, i) => (
+                      <th key={i} className="border-b border-r last:border-r-0 p-4 text-left font-semibold min-w-[140px]">{slot}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {days.map((day) => (
+                    <tr key={day} className="hover:bg-muted/30 transition-colors">
+                      <td className="border-b border-r p-4 font-semibold sticky left-0 bg-background z-10">{day}</td>
+                      {timeSlots.map((slotTime, slotIdx) => {
+                        const entry = getEntry(day, slotTime);
+                        return (
+                          <td key={slotIdx} className="border-b border-r last:border-r-0 p-2 h-28 align-top bg-background/50">
+                            {entry ? (
+                              <div className={`p-3 rounded-lg h-full text-sm border shadow-sm transition-all hover:shadow-md ${entry.isLab ? "bg-orange-50 border-orange-200 text-orange-900" : "bg-blue-50 border-blue-200 text-blue-900"}`}>
+                                <div className="font-bold line-clamp-2">{entry.course}</div>
+                                <div className="text-xs opacity-80 mt-1 flex items-center gap-1">
+                                  <span className="font-medium">{entry.room}</span>
+                                  <span>•</span>
+                                  <span>{entry.roomType}</span>
+                                </div>
+                                {entry.isLab && (
+                                  <div className="mt-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-200 text-orange-800 uppercase tracking-wider">
+                                    LAB
+                                  </div>
+                                )}
+                              </div>
+                            ) : null}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {timetableData.length === 0 && !loading && (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground bg-background">
+                  <div className="bg-muted p-4 rounded-full mb-4">
+                    <Eye className="w-8 h-8 opacity-50" />
+                  </div>
+                  <p className="font-medium">No timetable data available for this version</p>
+                </div>
+              )}
+            </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

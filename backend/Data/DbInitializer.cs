@@ -41,7 +41,8 @@ namespace SmartScheduleBackend.Data
                     instructor_id integer REFERENCES instructors(id),
                     room_id integer REFERENCES rooms(id),
                     time_slot_id integer REFERENCES time_slot(id),
-                    version integer DEFAULT 1
+                    version integer DEFAULT 1,
+                    created_at timestamp DEFAULT NOW()
                 );
 
                 CREATE TABLE IF NOT EXISTS class_off_days (
@@ -51,13 +52,17 @@ namespace SmartScheduleBackend.Data
                 );
             ";
 
-            // Add version column if it doesn't exist (migration-like behavior)
             var checkColSql = @"
                 DO $$
                 BEGIN
                     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                                    WHERE table_name='timetable' AND column_name='version') THEN
                         ALTER TABLE timetable ADD COLUMN version integer DEFAULT 1;
+                    END IF;
+
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='timetable' AND column_name='created_at') THEN
+                        ALTER TABLE timetable ADD COLUMN created_at timestamp DEFAULT NOW();
                     END IF;
                 END $$;
             ";

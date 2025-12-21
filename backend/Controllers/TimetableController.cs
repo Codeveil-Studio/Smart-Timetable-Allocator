@@ -32,6 +32,20 @@ namespace SmartScheduleBackend.Controllers
             }
         }
 
+        [HttpGet("summaries")]
+        public async Task<IActionResult> GetSummaries()
+        {
+            try
+            {
+                var summaries = await _service.GetTimetableSummaries();
+                return Ok(summaries);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpGet("{className}")]
         public async Task<IActionResult> GetTimetable(string className, [FromQuery] int? version)
         {
@@ -56,6 +70,23 @@ namespace SmartScheduleBackend.Controllers
                     return Ok(new { message = "Timetable regenerated successfully" });
                 else
                     return BadRequest(new { error = "Could not regenerate timetable" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpDelete("{className}")]
+        public async Task<IActionResult> Delete(string className)
+        {
+            try
+            {
+                var success = await _service.DeleteTimetable(className);
+                if (success)
+                    return Ok(new { message = "Timetable deleted successfully" });
+                else
+                    return NotFound(new { error = "Timetable not found" });
             }
             catch (Exception ex)
             {

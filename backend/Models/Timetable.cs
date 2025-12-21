@@ -30,5 +30,8 @@ namespace SmartScheduleBackend.Models
 
         [Column("version")]
         public int Version { get; set; } = 1;
+
+        [Column("created_at")]
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
