@@ -48,6 +48,36 @@ namespace SmartScheduleBackend.Services
                 await _context.SaveChangesAsync();
             }
 
+            // HANDLE OFF DAYS PERSISTENCE
+            // If this is a fresh generation (not just a regeneration of an existing one logic-wise, 
+            // but the user clicked "Generate"), we update the off-days for the class.
+            // If isRegeneration=true, we DON'T update off-days from request (request might have empty offdays anyway),
+            // instead we should have loaded them before calling this.
+            // Actually, for GenerateTimetable, if !isRegeneration, we should save the off-days.
+            
+            if (!isRegeneration)
+            {
+                // Remove existing off-days for this class
+                var existingOffDays = await _context.ClassOffDays
+                    .Where(d => d.AcademicClassId == academicClass.Id)
+                    .ToListAsync();
+                _context.ClassOffDays.RemoveRange(existingOffDays);
+
+                // Add new off-days
+                if (request.OffDays != null && request.OffDays.Any())
+                {
+                    foreach (var day in request.OffDays)
+                    {
+                        _context.ClassOffDays.Add(new ClassOffDay
+                        {
+                            AcademicClassId = academicClass.Id,
+                            Day = day
+                        });
+                    }
+                }
+                await _context.SaveChangesAsync();
+            }
+
             // DETERMINE VERSION
             int newVersion = 1;
             if (isRegeneration)
@@ -404,18 +434,18 @@ namespace SmartScheduleBackend.Services
             var courseIds = existingEntries.Select(t => t.CourseId).Distinct().ToList();
             var roomIds = existingEntries.Select(t => t.RoomId).Distinct().ToList();
 
-            // We assume "Off Days" are none for regeneration, as we can't infer them reliably.
-            // Or we could check which days are completely empty in the previous version?
-            // Risk: If a day was full but just happened to have no classes scheduled due to conflicts? Unlikely.
-            // Risk: If a day was explicitly OFF, we re-enable it. This is a trade-off.
-            // Let's assume NO off days for now.
+            // Load Off Days from DB
+            var offDays = await _context.ClassOffDays
+                .Where(d => d.AcademicClassId == academicClass.Id)
+                .Select(d => d.Day)
+                .ToListAsync();
 
             var request = new GenerateRequest
             {
                 ClassName = className,
                 CourseIds = courseIds,
                 RoomIds = roomIds,
-                OffDays = new List<string>() 
+                OffDays = offDays 
             };
 
             return await GenerateTimetable(request, isRegeneration: true);

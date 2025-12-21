@@ -96,6 +96,7 @@ const ViewTimetable = () => {
       return;
     }
     setLoading(true);
+    setTimetableData([]);
     try {
       let url = `${API_BASE}/timetable/${targetClass}`;
       if (targetVersion) {
@@ -180,7 +181,12 @@ const ViewTimetable = () => {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="space-y-2">
             <Label>Semester</Label>
-            <Select value={selectedSemester} onValueChange={setSelectedSemester}>
+            <Select value={selectedSemester} onValueChange={(val) => {
+              setSelectedSemester(val);
+              setSelectedClass("");
+              setAvailableVersions([]);
+              setSelectedVersion("");
+            }}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -193,7 +199,11 @@ const ViewTimetable = () => {
 
           <div className="space-y-2">
             <Label>Class</Label>
-            <Select value={selectedClass} onValueChange={setSelectedClass} disabled={!selectedSemester}>
+            <Select value={selectedClass} onValueChange={(val) => {
+              setSelectedClass(val);
+              setAvailableVersions([]);
+              setSelectedVersion("");
+            }} disabled={!selectedSemester}>
               <SelectTrigger>
                 <SelectValue placeholder={!selectedSemester ? "Select Semester first" : "Select Class"} />
               </SelectTrigger>
@@ -212,8 +222,10 @@ const ViewTimetable = () => {
                  <SelectValue placeholder="Latest" />
                </SelectTrigger>
                <SelectContent>
-                 {availableVersions.map((ver) => (
-                   <SelectItem key={ver} value={ver.toString()}>Version {ver}</SelectItem>
+                 {availableVersions.map((ver, index) => (
+                   <SelectItem key={ver} value={ver.toString()}>
+                     Version {ver} {index === 0 ? "(Latest)" : ""}
+                   </SelectItem>
                  ))}
                </SelectContent>
              </Select>

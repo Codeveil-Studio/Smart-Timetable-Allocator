@@ -15,6 +15,7 @@ namespace SmartScheduleBackend.Data
         public DbSet<AcademicClass> AcademicClasses { get; set; }
         public DbSet<TimeSlot> TimeSlots { get; set; }
         public DbSet<Timetable> Timetables { get; set; }
+        public DbSet<ClassOffDay> ClassOffDays { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -25,6 +26,7 @@ namespace SmartScheduleBackend.Data
             modelBuilder.Entity<AcademicClass>().ToTable("academic_class");
             modelBuilder.Entity<TimeSlot>().ToTable("time_slot");
             modelBuilder.Entity<Timetable>().ToTable("timetable");
+            modelBuilder.Entity<ClassOffDay>().ToTable("class_off_days");
         }
     }
 }

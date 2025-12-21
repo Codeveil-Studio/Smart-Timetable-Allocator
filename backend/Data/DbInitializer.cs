@@ -43,6 +43,12 @@ namespace SmartScheduleBackend.Data
                     time_slot_id integer REFERENCES time_slot(id),
                     version integer DEFAULT 1
                 );
+
+                CREATE TABLE IF NOT EXISTS class_off_days (
+                    id serial PRIMARY KEY,
+                    academic_class_id integer REFERENCES academic_class(id),
+                    day text NOT NULL
+                );
             ";
 
             // Add version column if it doesn't exist (migration-like behavior)
