@@ -33,7 +33,8 @@ namespace SmartScheduleBackend.Controllers
                 Code = dto.Code,
                 Title = dto.Title,
                 CreditHours = dto.CreditHours,
-                InstructorId = dto.InstructorId
+                InstructorId = dto.InstructorId,
+                IsLab = dto.IsLab
             };
 
             _context.Courses.Add(course);
@@ -54,6 +55,7 @@ namespace SmartScheduleBackend.Controllers
             existing.Title = course.Title;
             existing.CreditHours = course.CreditHours;
             existing.InstructorId = course.InstructorId;
+            existing.IsLab = course.IsLab;
 
             await _context.SaveChangesAsync();
             return Ok(existing);

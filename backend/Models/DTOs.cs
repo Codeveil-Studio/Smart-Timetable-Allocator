@@ -12,6 +12,7 @@ namespace SmartScheduleBackend.Models
         public string Title { get; set; } = string.Empty;
         public int CreditHours { get; set; }
         public int? InstructorId { get; set; }
+        public bool IsLab { get; set; }
     }
 
     public class RoomCreateDto

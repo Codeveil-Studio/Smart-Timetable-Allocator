@@ -52,7 +52,7 @@ const GenerateTimetable = () => {
   const [newCourseCode, setNewCourseCode] = useState("");
   const [newCourseTitle, setNewCourseTitle] = useState("");
   const [newCourseCreditHours, setNewCourseCreditHours] = useState<number | "">("");
-  const [newCourseInstructorId, setNewCourseInstructorId] = useState<string>("no-instructor");
+  const [newCourseIsLab, setNewCourseIsLab] = useState(false);
 
   // Edit State
   const [editOpen, setEditOpen] = useState(false);
@@ -61,7 +61,7 @@ const GenerateTimetable = () => {
   
   const [editInstructor, setEditInstructor] = useState({ name: "" });
   const [editRoom, setEditRoom] = useState({ roomNumber: "", roomType: "" });
-  const [editCourse, setEditCourse] = useState<{ code: string; title: string; creditHours: number; instructorId: string }>({ code: "", title: "", creditHours: 0, instructorId: "no-instructor" });
+  const [editCourse, setEditCourse] = useState<{ code: string; title: string; creditHours: number; isLab: boolean }>({ code: "", title: "", creditHours: 0, isLab: false });
 
   // Delete State
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -77,12 +77,13 @@ const GenerateTimetable = () => {
       setRooms((rmData as Array<{ id: number; room_number: string; room_type: string }>).map((x) => ({ id: x.id, roomNumber: x.room_number, roomType: x.room_type })));
 
       const crData: unknown = await apiFetch(`${API_BASE}/courses`);
-      setCourses((crData as Array<{ id: number; code: string; title: string; credit_hours: number; instructor_id?: number }>).map((x) => ({ 
+      setCourses((crData as Array<{ id: number; code: string; title: string; credit_hours: number; instructor_id?: number; isLab?: boolean }>).map((x) => ({ 
         id: x.id, 
         code: x.code, 
         title: x.title, 
         creditHours: x.credit_hours,
-        instructorId: x.instructor_id
+        instructorId: x.instructor_id,
+        isLab: !!x.isLab
       })));
     } catch (e) {
       console.error("Failed to load data", e);
@@ -381,6 +382,7 @@ const GenerateTimetable = () => {
                       <tr className="bg-muted">
                         <th className="border border-border p-3 text-left font-semibold">Course Code</th>
                         <th className="border border-border p-3 text-left font-semibold">Course Title</th>
+                        <th className="border border-border p-3 text-left font-semibold">Type</th>
                         <th className="border border-border p-3 text-left font-semibold">Credit Hours</th>
                         <th className="border border-border p-2 text-left font-semibold w-[140px]">Actions</th>
                       </tr>
@@ -390,6 +392,7 @@ const GenerateTimetable = () => {
                         <tr key={`${c.code}-${idx}`} className="hover:bg-muted/30 transition-colors">
                           <td className="border border-border p-3">{c.code}</td>
                           <td className="border border-border p-3">{c.title}</td>
+                          <td className="border border-border p-3">{c.isLab ? "Lab" : "Theory"}</td>
                           <td className="border border-border p-3">{c.creditHours}</td>
                           <td className="border border-border p-2 w-[140px] whitespace-nowrap">
                             <div className="flex gap-1">
@@ -404,7 +407,7 @@ const GenerateTimetable = () => {
                                     code: c.code, 
                                     title: c.title, 
                                     creditHours: c.creditHours,
-                                    instructorId: c.instructorId ? String(c.instructorId) : "no-instructor"
+                                    isLab: !!c.isLab
                                   });
                                   setEditOpen(true);
                                 }}
@@ -454,16 +457,14 @@ const GenerateTimetable = () => {
                     />
                   </div>
                    <div className="space-y-2">
-                    <Label>Instructor (Optional)</Label>
-                    <Select value={newCourseInstructorId} onValueChange={setNewCourseInstructorId}>
+                    <Label>Type</Label>
+                    <Select value={newCourseIsLab ? "Lab" : "Theory"} onValueChange={(v) => setNewCourseIsLab(v === "Lab")}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select instructor" />
+                        <SelectValue placeholder="Select type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="no-instructor">None</SelectItem>
-                        {instructors.map(inst => (
-                            <SelectItem key={inst.id} value={String(inst.id)}>{inst.name}</SelectItem>
-                        ))}
+                        <SelectItem value="Theory">Theory</SelectItem>
+                        <SelectItem value="Lab">Lab</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -475,7 +476,6 @@ const GenerateTimetable = () => {
                         if (!newCourseCode || !newCourseTitle || newCourseCreditHours === "") return;
                         (async () => {
                           try {
-                            const instructorIdVal = newCourseInstructorId === "no-instructor" ? null : Number(newCourseInstructorId);
                             const row = (await apiFetch(`${API_BASE}/courses`, {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
@@ -483,10 +483,10 @@ const GenerateTimetable = () => {
                                 code: newCourseCode, 
                                 title: newCourseTitle, 
                                 creditHours: Number(newCourseCreditHours),
-                                instructorId: instructorIdVal
+                                isLab: newCourseIsLab
                               }),
-                            })) as { id: number; code: string; title: string; credit_hours: number; instructor_id?: number };
-                            setCourses((prev) => [...prev, { id: row.id, code: row.code, title: row.title, creditHours: row.credit_hours, instructorId: row.instructor_id }]);
+                            })) as { id: number; code: string; title: string; credit_hours: number; instructor_id?: number; isLab?: boolean };
+                            setCourses((prev) => [...prev, { id: row.id, code: row.code, title: row.title, creditHours: row.credit_hours, instructorId: row.instructor_id, isLab: !!row.isLab }]);
                             toast.success("Course added", { description: `${row.code} — ${row.title}` });
                           } catch (e) {
                             const msg = e instanceof Error ? e.message : "Failed to add course";
@@ -557,16 +557,14 @@ const GenerateTimetable = () => {
                   <Input type="number" min={0} step={1} value={editCourse.creditHours} onChange={(e) => setEditCourse({ ...editCourse, creditHours: Math.max(0, Number(e.target.value)) })} />
                 </div>
                 <div className="space-y-2">
-                    <Label>Instructor</Label>
-                    <Select value={editCourse.instructorId} onValueChange={(v) => setEditCourse({ ...editCourse, instructorId: v })}>
+                    <Label>Type</Label>
+                    <Select value={editCourse.isLab ? "Lab" : "Theory"} onValueChange={(v) => setEditCourse({ ...editCourse, isLab: v === "Lab" })}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select instructor" />
+                        <SelectValue placeholder="Select type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="no-instructor">None</SelectItem>
-                        {instructors.map(inst => (
-                            <SelectItem key={inst.id} value={String(inst.id)}>{inst.name}</SelectItem>
-                        ))}
+                        <SelectItem value="Theory">Theory</SelectItem>
+                        <SelectItem value="Lab">Lab</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -613,7 +611,6 @@ const GenerateTimetable = () => {
                     const id = courses[editIndex].id;
                     (async () => {
                       try {
-                         const instructorIdVal = editCourse.instructorId === "no-instructor" ? null : Number(editCourse.instructorId);
                         const row = (await apiFetch(`${API_BASE}/courses`, {
                           method: "PUT",
                           headers: { "Content-Type": "application/json" },
@@ -622,10 +619,10 @@ const GenerateTimetable = () => {
                             code: editCourse.code, 
                             title: editCourse.title, 
                             creditHours: editCourse.creditHours,
-                            instructorId: instructorIdVal
+                            isLab: editCourse.isLab
                           }),
-                        })) as { code: string; title: string; credit_hours: number; instructor_id?: number };
-                        setCourses((prev) => prev.map((x, i) => (i === editIndex ? { id, code: row.code, title: row.title, creditHours: row.credit_hours, instructorId: row.instructor_id } : x)));
+                        })) as { code: string; title: string; credit_hours: number; instructor_id?: number; isLab?: boolean };
+                        setCourses((prev) => prev.map((x, i) => (i === editIndex ? { id, code: row.code, title: row.title, creditHours: row.credit_hours, instructorId: row.instructor_id, isLab: !!row.isLab } : x)));
                         toast.success("Course updated", { description: `${row.code} — ${row.title}` });
                       } catch (e) {
                         const msg = e instanceof Error ? e.message : "Failed to update course";

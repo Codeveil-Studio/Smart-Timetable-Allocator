@@ -23,6 +23,10 @@ namespace SmartScheduleBackend.Models
         [JsonPropertyName("instructor_id")]
         public int? InstructorId { get; set; } // Nullable because course might not have instructor initially
 
+        [Column("isLab")]
+        [JsonPropertyName("isLab")]
+        public bool IsLab { get; set; }
+
         public Instructor? Instructor { get; set; }
     }
 }
