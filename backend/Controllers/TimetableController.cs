@@ -26,6 +26,10 @@ namespace SmartScheduleBackend.Controllers
                 else
                     return BadRequest(new { error = "Could not generate timetable due to conflicts" });
             }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { error = ex.Message });
+            }
             catch (Exception ex)
             {
                 return StatusCode(500, new { error = ex.Message });
@@ -70,6 +74,23 @@ namespace SmartScheduleBackend.Controllers
                     return Ok(new { message = "Timetable regenerated successfully" });
                 else
                     return BadRequest(new { error = "Could not regenerate timetable" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpDelete("{className}/versions/{version}")]
+        public async Task<IActionResult> DeleteVersion(string className, int version)
+        {
+            try
+            {
+                var success = await _service.DeleteTimetableVersion(className, version);
+                if (success)
+                    return Ok(new { message = "Version deleted successfully" });
+                else
+                    return NotFound(new { error = "Version not found" });
             }
             catch (Exception ex)
             {

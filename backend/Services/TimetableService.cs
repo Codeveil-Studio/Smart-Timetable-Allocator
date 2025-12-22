@@ -41,6 +41,17 @@ namespace SmartScheduleBackend.Services
 
             // 1. Get or Create Academic Class
             var academicClass = await _context.AcademicClasses.FirstOrDefaultAsync(a => a.Name == request.ClassName);
+            
+            // CHECK IF TIMETABLE EXISTS
+            if (!isRegeneration && academicClass != null)
+            {
+                var exists = await _context.Timetables.AnyAsync(t => t.AcademicClassId == academicClass.Id);
+                if (exists)
+                {
+                    throw new InvalidOperationException($"Timetable already exists for class '{request.ClassName}'. Visit View Timetable. You can first delete from there to continue.");
+                }
+            }
+
             if (academicClass == null)
             {
                 academicClass = new AcademicClass { Name = request.ClassName };
@@ -273,6 +284,22 @@ namespace SmartScheduleBackend.Services
             // Iterate days to find a valid block
             var days = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday" };
             
+            // Randomize days order for variety, but ensure distribution
+            // To ensure utilization of all days, we sort days by "Load" (number of slots used by this class so far)
+            // But we can't easily track load per day inside the loop without context.
+            // A simpler approach for variety: Shuffle the days list.
+            var random = new Random();
+            days = days.OrderBy(x => random.Next()).ToArray();
+
+            // To prioritize utilization of ALL days (Load Balancing), we should sort days by how many credits are already assigned to them.
+            // We need to calculate load for each day from `currentSessionTimetable`.
+            
+            var dayLoads = days.ToDictionary(d => d, d => currentSessionTimetable.Count(t => t.TimeSlotId != 0 && allSlots.FirstOrDefault(s => s.Id == t.TimeSlotId)?.Day == d));
+            
+            // Sort days by load (ascending) to pick the least used day first
+            // But we also want randomness if loads are equal.
+            days = days.OrderBy(d => dayLoads[d]).ThenBy(x => random.Next()).ToArray();
+            
             foreach (var day in days)
             {
                 if (usedDays.Contains(day)) continue; // Must be different day
@@ -349,6 +376,22 @@ namespace SmartScheduleBackend.Services
             }
 
             return false;
+        }
+
+        public async Task<bool> DeleteTimetableVersion(string className, int version)
+        {
+            var academicClass = await _context.AcademicClasses.FirstOrDefaultAsync(a => a.Name == className);
+            if (academicClass == null) return false;
+
+            var entries = await _context.Timetables
+                .Where(t => t.AcademicClassId == academicClass.Id && t.Version == version)
+                .ToListAsync();
+
+            if (!entries.Any()) return false;
+
+            _context.Timetables.RemoveRange(entries);
+            await _context.SaveChangesAsync();
+            return true;
         }
 
         public async Task<bool> DeleteTimetable(string className)

@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Download, FileSpreadsheet, Eye, RefreshCw, X, Trash2 } from "lucide-react";
+import { Download, FileSpreadsheet, Eye, RefreshCw, X, Trash2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
@@ -69,6 +70,8 @@ const ViewTimetable = () => {
   const [regenerating, setRegenerating] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [classToDelete, setClassToDelete] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [versionToDelete, setVersionToDelete] = useState<string | null>(null);
 
   // Fetch summaries on mount
   useEffect(() => {
@@ -90,16 +93,26 @@ const ViewTimetable = () => {
       const versions = await apiFetch(`${API_BASE}/timetable/${className}/versions`) as number[];
       setAvailableVersions(versions);
       if (versions.length > 0) {
-        setSelectedVersion(versions[0].toString());
-        return versions[0].toString();
+        // If selectedVersion is not in the new list (e.g. deleted), select the first one
+        // Or if nothing selected yet
+        // Actually, logic is simpler: If we just loaded modal, pick first.
+        // If we are refreshing, we might want to keep selection if possible?
+        // For simplicity, let's return the versions so caller can decide, but also default to 0 if not set.
+        
+        // Caller logic handles selection usually.
+        // But for safety:
+        // setSelectedVersion(versions[0].toString()); // This overrides user selection on background refresh?
+        // Let's only set if selected is empty
+        // Wait, the caller uses the return value.
+        return versions.map(v => v.toString());
       } else {
         setSelectedVersion("");
-        return null;
+        return [];
       }
     } catch (e) {
       console.error("Failed to fetch versions", e);
       setAvailableVersions([]);
-      return null;
+      return [];
     }
   };
 
@@ -125,9 +138,10 @@ const ViewTimetable = () => {
   const handleViewTimetable = async (className: string) => {
     setSelectedClass(className);
     setIsModalOpen(true);
-    const latestVersion = await fetchVersions(className);
-    if (latestVersion) {
-      fetchTimetable(className, latestVersion);
+    const versions = await fetchVersions(className);
+    if (versions && versions.length > 0) {
+      setSelectedVersion(versions[0]);
+      fetchTimetable(className, versions[0]);
     }
   };
 
@@ -144,11 +158,10 @@ const ViewTimetable = () => {
       fetchSummaries();
 
       // Refresh versions and fetch latest
-      const versions = await apiFetch(`${API_BASE}/timetable/${selectedClass}/versions`) as number[];
-      setAvailableVersions(versions);
+      const versions = await fetchVersions(selectedClass);
       if (versions.length > 0) {
-         setSelectedVersion(versions[0].toString());
-         fetchTimetable(selectedClass, versions[0].toString());
+         setSelectedVersion(versions[0]);
+         fetchTimetable(selectedClass, versions[0]);
       }
     } catch (e: any) {
       toast.error(e.message || "Regeneration failed");
@@ -168,6 +181,33 @@ const ViewTimetable = () => {
       toast.error(e.message || "Failed to delete timetable");
     } finally {
       setClassToDelete(null);
+    }
+  };
+
+  const handleDeleteVersion = async () => {
+    if (!versionToDelete || !selectedClass) return;
+    try {
+      await apiFetch(`${API_BASE}/timetable/${selectedClass}/versions/${versionToDelete}`, { method: "DELETE" });
+      toast.success(`Version ${versionToDelete} deleted successfully`);
+      
+      // Refresh logic
+      const versions = await fetchVersions(selectedClass);
+      fetchSummaries(); // Update main list counts
+      
+      // If we deleted the current view, switch to latest or close
+      // fetchVersions sets selectedVersion to latest automatically if any exist
+      if (versions && versions.length > 0) {
+        // It automatically selects the first one (latest) in fetchVersions
+        fetchTimetable(selectedClass, versions[0]); 
+      } else {
+        setIsModalOpen(false); // No versions left
+      }
+      
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.message || "Failed to delete version");
+    } finally {
+      setVersionToDelete(null);
     }
   };
 
@@ -191,9 +231,20 @@ const ViewTimetable = () => {
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold tracking-tight">Timetable Dashboard</h2>
-        <Button onClick={fetchSummaries} variant="outline" size="sm" className="gap-2">
-          <RefreshCw className="w-4 h-4" /> Refresh List
-        </Button>
+        <div className="flex items-center gap-2">
+            <div className="relative w-64">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    placeholder="Search class..." 
+                    className="pl-8" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                />
+            </div>
+            <Button onClick={fetchSummaries} variant="outline" size="sm" className="gap-2">
+            <RefreshCw className="w-4 h-4" /> Refresh List
+            </Button>
+        </div>
       </div>
 
       <Card className="shadow-soft-md overflow-hidden">
@@ -216,7 +267,9 @@ const ViewTimetable = () => {
                   </td>
                 </tr>
               ) : (
-                summaries.map((summary) => (
+                summaries
+                .filter(s => s.className.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map((summary) => (
                   <tr key={summary.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-6 py-4 font-medium">{summary.id}</td>
                     <td className="px-6 py-4 text-foreground font-semibold">{summary.className}</td>
@@ -265,6 +318,25 @@ const ViewTimetable = () => {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Delete Version Confirmation */}
+      <AlertDialog open={!!versionToDelete} onOpenChange={(open) => !open && setVersionToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Version {versionToDelete}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>Version {versionToDelete}</strong> of the timetable for <strong>{selectedClass}</strong>. 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteVersion} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete Version
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Timetable Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-[95vw] w-full h-[90vh] flex flex-col p-0 gap-0">
@@ -291,6 +363,16 @@ const ViewTimetable = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                <Button 
+                  variant="destructive" 
+                  size="icon"
+                  className="h-9 w-9"
+                  disabled={availableVersions.length <= 1}
+                  onClick={() => setVersionToDelete(selectedVersion)}
+                  title="Delete this version"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             </div>
             

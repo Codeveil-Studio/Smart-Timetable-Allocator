@@ -7,6 +7,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -69,6 +79,8 @@ const GenerateSchedule = () => {
 
   const [courseFilter, setCourseFilter] = useState("");
   const [roomFilter, setRoomFilter] = useState("");
+
+  const [conflictError, setConflictError] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -161,12 +173,35 @@ const GenerateSchedule = () => {
               navigate("/view", { state: { semester: selectedSemester, className: selectedClass } });
             } catch (e: any) {
               console.error(e);
-              toast.error(e.message || "Failed to generate timetable");
+              const msg = e.message || "Failed to generate timetable";
+              if (msg.includes("Timetable already exists")) {
+                 setConflictError(msg);
+              } else {
+                 toast.error(msg);
+              }
             }
           }}>
             Generate Timetable
           </Button>
         </div>
+
+        {/* Conflict Dialog */}
+        <AlertDialog open={!!conflictError} onOpenChange={(open) => !open && setConflictError(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Timetable Exists</AlertDialogTitle>
+              <AlertDialogDescription>
+                {conflictError}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => navigate("/view")}>
+                View Timetable
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="space-y-2">
