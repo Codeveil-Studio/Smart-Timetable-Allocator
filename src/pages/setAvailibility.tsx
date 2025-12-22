@@ -598,7 +598,7 @@ const GenerateTimetable = () => {
                       const row = (await apiFetch(`${API_BASE}/rooms`, {
                         method: "PUT",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ id, roomNumber: editRoom.roomNumber, roomType: editRoom.roomType }),
+                        body: JSON.stringify({ id, room_number: editRoom.roomNumber, room_type: editRoom.roomType }),
                       })) as { room_number: string; room_type: string };
                       setRooms((prev) => prev.map((x, i) => (i === editIndex ? { id, roomNumber: row.room_number, roomType: row.room_type } : x)));
                       toast.success("Room updated", { description: `${row.room_number} (${row.room_type})` });

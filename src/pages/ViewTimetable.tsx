@@ -284,7 +284,7 @@ const ViewTimetable = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
                         <Button size="sm" onClick={() => handleViewTimetable(summary.className)} className="gap-2">
-                          <Eye className="w-4 h-4" /> View
+                          <Eye className="w-4 h-4" /> View Timetable
                         </Button>
                         <Button size="sm" variant="destructive" onClick={() => setClassToDelete(summary.className)} className="gap-2">
                           <Trash2 className="w-4 h-4" /> Delete
@@ -305,7 +305,7 @@ const ViewTimetable = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              Deleting the timetable of <span className="font-bold text-foreground">{classToDelete}</span> will delete it permanently. 
+              Deleting the timetable of <span className="font-bold text-foreground">{classToDelete}</span> will delete that respective class timetable with all its versions. 
               This action cannot be reversed.
             </AlertDialogDescription>
           </AlertDialogHeader>
