@@ -493,6 +493,128 @@ namespace SmartScheduleBackend.Services
                          }).Cast<object>().ToList();
         }
 
+        public async Task<object> CompareTimetables(string classA, int verA, string classB, int verB)
+        {
+            // 1. Fetch Timetable A
+            var listA = await _context.Timetables
+                .Include(t => t.AcademicClass)
+                .Include(t => t.Course)
+                .Include(t => t.Instructor)
+                .Include(t => t.Room)
+                .Include(t => t.TimeSlot)
+                .Where(t => t.AcademicClass.Name == classA && t.Version == verA)
+                .ToListAsync();
+
+            // 2. Fetch Timetable B
+            var listB = await _context.Timetables
+                .Include(t => t.AcademicClass)
+                .Include(t => t.Course)
+                .Include(t => t.Instructor)
+                .Include(t => t.Room)
+                .Include(t => t.TimeSlot)
+                .Where(t => t.AcademicClass.Name == classB && t.Version == verB)
+                .ToListAsync();
+
+            var conflicts = new List<object>();
+
+            // 3. Build Maps for Timetable B for O(1) lookups
+            // Key format: "{Id}|{Day}|{StartTime}"
+            
+            // Helper to generate key
+            string GetTimeKey(Timetable t) => $"{t.TimeSlot.Day}|{t.TimeSlotId}"; // TimeSlotId implies specific time
+
+            var mapB_Instructor = listB.GroupBy(t => $"{t.InstructorId}|{GetTimeKey(t)}")
+                                       .ToDictionary(g => g.Key, g => g.First());
+
+            var mapB_Room = listB.GroupBy(t => $"{t.RoomId}|{GetTimeKey(t)}")
+                                 .ToDictionary(g => g.Key, g => g.First());
+            
+            var mapB_Course = listB.GroupBy(t => $"{t.CourseId}|{GetTimeKey(t)}")
+                                   .ToDictionary(g => g.Key, g => g.First());
+
+            // 4. Iterate A and check conflicts
+            foreach (var itemA in listA)
+            {
+                if (itemA.TimeSlot == null) continue; // Should not happen
+
+                string timeKey = GetTimeKey(itemA);
+                
+                // Check Instructor Conflict
+                // "Same instructor_id + day + time_slot_id"
+                string keyInst = $"{itemA.InstructorId}|{timeKey}";
+                if (mapB_Instructor.TryGetValue(keyInst, out var conflictB))
+                {
+                    conflicts.Add(new
+                    {
+                        Type = "Instructor",
+                        Description = $"Instructor {itemA.Instructor?.Name} is double booked.",
+                        Day = itemA.TimeSlot.Day,
+                        Time = itemA.TimeSlot.StartTime.ToString(@"hh\:mm"),
+                        EntityA_Id = itemA.Id,
+                        EntityB_Id = conflictB.Id
+                    });
+                }
+
+                // Check Room Conflict
+                // "Same room_id + day + time_slot_id"
+                string keyRoom = $"{itemA.RoomId}|{timeKey}";
+                if (mapB_Room.TryGetValue(keyRoom, out var conflictB_Room))
+                {
+                    conflicts.Add(new
+                    {
+                        Type = "Room",
+                        Description = $"Room {itemA.Room?.RoomNumber} is double booked.",
+                        Day = itemA.TimeSlot.Day,
+                        Time = itemA.TimeSlot.StartTime.ToString(@"hh\:mm"),
+                        EntityA_Id = itemA.Id,
+                        EntityB_Id = conflictB_Room.Id
+                    });
+                }
+
+                // Check Course Overlap
+                // "Same course_id + day + time_slot_id"
+                string keyCourse = $"{itemA.CourseId}|{timeKey}";
+                if (mapB_Course.TryGetValue(keyCourse, out var conflictB_Course))
+                {
+                    conflicts.Add(new
+                    {
+                        Type = "Course",
+                        Description = $"Course {itemA.Course?.Title} is scheduled in both timetables at same time.",
+                        Day = itemA.TimeSlot.Day,
+                        Time = itemA.TimeSlot.StartTime.ToString(@"hh\:mm"),
+                        EntityA_Id = itemA.Id,
+                        EntityB_Id = conflictB_Course.Id
+                    });
+                }
+            }
+
+            // 5. Format Output
+            var formatEntry = (Timetable t) => new
+            {
+                Id = t.Id,
+                Class = t.AcademicClass?.Name,
+                Course = t.Course?.Title,
+                CourseId = t.CourseId,
+                Room = t.Room?.RoomNumber,
+                RoomId = t.RoomId,
+                RoomType = t.Room?.RoomType,
+                Instructor = t.Instructor?.Name,
+                InstructorId = t.InstructorId,
+                IsLab = t.Course?.IsLab ?? false,
+                Day = t.TimeSlot?.Day,
+                StartTime = t.TimeSlot?.StartTime.ToString(@"hh\:mm"),
+                EndTime = t.TimeSlot?.EndTime.ToString(@"hh\:mm"),
+                Version = t.Version
+            };
+
+            return new
+            {
+                TimetableA = listA.Select(formatEntry).ToList(),
+                TimetableB = listB.Select(formatEntry).ToList(),
+                Conflicts = conflicts
+            };
+        }
+
         public async Task<List<int>> GetVersions(string className)
         {
             return await _context.Timetables

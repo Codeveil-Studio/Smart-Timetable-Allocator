@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import GenerateTimetable from "./pages/setAvailibility";
 import GenerateSchedule from "./pages/GenerateSchedule";
 import ViewTimetable from "./pages/ViewTimetable";
+import CompareTimetables from "./pages/CompareTimetables";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +49,14 @@ const App = () => (
             element={
               <MainLayout>
                 <ViewTimetable />
+              </MainLayout>
+            }
+          />
+          <Route
+            path="/compare"
+            element={
+              <MainLayout>
+                <CompareTimetables />
               </MainLayout>
             }
           />

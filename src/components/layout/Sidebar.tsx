@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink } from "@/components/NavLink";
-import { LayoutGrid, Calendar, Table, ChevronLeft, ChevronRight, GraduationCap } from "lucide-react";
+import { LayoutGrid, Calendar, Table, ChevronLeft, ChevronRight, GraduationCap, GitCompare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -8,6 +8,7 @@ const navItems = [
   { title: "Set Availibility", path: "/generate", icon: Calendar },
   { title: "Generate Timetable", path: "/generate-timetable", icon: Calendar },
   { title: "View Timetable", path: "/view", icon: Table },
+  { title: "Compare Timetables", path: "/compare", icon: GitCompare },
 ];
 
 export const Sidebar = () => {

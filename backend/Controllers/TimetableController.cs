@@ -114,5 +114,18 @@ namespace SmartScheduleBackend.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+        [HttpPost("compare")]
+        public async Task<IActionResult> Compare([FromBody] CompareRequest request)
+        {
+            try
+            {
+                var result = await _service.CompareTimetables(request.ClassA, request.VersionA, request.ClassB, request.VersionB);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
     }
 }
