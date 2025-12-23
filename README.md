@@ -1,123 +1,81 @@
-# Smart Schedule Hub
+# Smart Timetable Allocator Web App
 
-A modern, React + TypeScript application for university timetable management and scheduling.
+A modern, intelligent timetable management system designed to optimize university scheduling. This project is developed as part of our **3rd Semester DSA (Data Structures and Algorithms) Course**.
 
-## Tech Stack
-- React 18, TypeScript
-- Vite 5 (fast dev, optimized build)
-- Tailwind CSS + shadcn/ui (Radix primitives)
-- React Router, TanStack Query
-- Recharts, Lucide Icons
+---
 
-## Prerequisites
-- Node.js 18 or newer
-- npm (comes with Node.js)
+## 📚 Course Context
+**Course:** Data Structures and Algorithms (DSA)  
+**Semester:** 3rd Semester  
+**Institution:** Bahria University Karachi
 
-## Getting Started
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-2. Start the development server:
-   ```bash
-   npm run dev
-   ```
-   The app runs on `http://localhost:8080/` (if occupied, Vite picks another port).
-3. Open the app in your browser and start building.
+This project demonstrates the practical application of core DSA concepts such as Graph Theory, Backtracking, and Hash-based data structures to solve the complex Constraint Satisfaction Problem (CSP) of university timetabling.
 
-## Available Scripts
-- `npm run dev` – start local dev server
-- `npm run build` – create production build in `dist/`
-- `npm run preview` – preview the production build locally
-- `npm run lint` – run ESLint across the project
+---
 
-## Configuration
-- Dev server port and host are configured in `vite.config.ts`.
-- Path alias `@` maps to `src/` for cleaner imports.
+## 🛠 Tech Stack
 
-## Project Structure
-```
-smart-schedule-hub/
-├─ src/
-│  ├─ components/        # UI components (shadcn/ui + custom)
-│  ├─ pages/             # Route pages
-│  ├─ lib/               # Utilities
-│  ├─ main.tsx           # App entry
-│  └─ index.css          # Tailwind styles and CSS variables
-├─ index.html            # Vite HTML entry
-├─ vite.config.ts        # Vite config (server, aliases, plugins)
-├─ tailwind.config.ts    # Tailwind configuration
-├─ package.json          # Scripts and dependencies
-└─ README.md
-```
+### Frontend
+- **Framework:** React 18 (TypeScript)
+- **Build Tool:** Vite 5
+- **Styling:** Tailwind CSS + shadcn/ui
+- **State Management:** TanStack Query
+- **Routing:** React Router DOM
+- **Visualization:** Recharts (Analytics)
 
-## Build & Preview
-```bash
-npm run build
-npm run preview
-```
-Then open the printed local URL.
+### Backend
+- **Framework:** .NET 8 (C#)
+- **Architecture:** RESTful API
+- **ORM:** Entity Framework Core (EF Core)
+- **Database:** PostgreSQL (Npgsql)
 
-## Notes
-- Theming uses `next-themes` with Tailwind CSS variables.
-- UI components are built with shadcn/ui and Radix for accessibility and composability.
+---
 
-## Project info
+## 🧠 Data Structures & Algorithms
 
-**URL**: https://lovable.dev/projects/3adfc167-117f-43bb-86f1-7d6b97010968
+The core intelligence of the scheduler relies on the following:
 
-## How can I edit this code?
+### 1. Algorithms
+- **Greedy Heuristic with Backtracking (Implicit):** Used in the `GenerateTimetable` logic to attempt slot allocation using a "Sliding Window" technique. If a block fits, it's assigned; otherwise, the algorithm backtracks to try the next slot or day.
+- **Load Balancing:** Heuristic sorting of days to ensure courses are distributed evenly across the week.
+- **Conflict Detection:** O(N) verification using Hash Maps to ensure no overlaps in Rooms, Instructors, or Student Groups.
 
-There are several ways of editing your application.
+### 2. Data Structures
+- **HashSet:** Used for O(1) constraints tracking (e.g., `usedDays` to prevent scheduling the same course multiple times on the same day).
+- **Dictionary (Hash Map):** Utilized for O(1) lookups during conflict detection and comparison (e.g., mapping `InstructorId|TimeKey` to existing bookings).
+- **Graphs (Implicit):** The scheduling problem is modeled as a graph coloring problem where:
+  - **Nodes:** Course Sessions
+  - **Edges:** Constraints (Same Room, Same Instructor)
+- **Lists (Arrays):** For maintaining ordered sequences of time slots and priority queues for courses.
 
-**Use Lovable**
+---
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/3adfc167-117f-43bb-86f1-7d6b97010968) and start prompting.
+## ✨ Functionality
 
-Changes made via Lovable will be committed automatically to this repo.
+1. **Dashboard & Analytics:** Real-time overview of total courses, instructors, rooms, and generated timetables with graphical insights (Last 7 Days Activity).
+2. **Generate Timetable:** Automated scheduling engine that respects:
+   - Instructor Availability
+   - Room Capacity & Type (Lab vs. Lecture)
+   - Course Credit Hours (Splitting into 2hr/1hr blocks)
+   - Off-Day Preferences
+3. **View Timetable:** Interactive grid view with filtering by Course, Room, or Instructor. Supports PDF export.
+4. **Compare Timetables:** Side-by-side comparison of two timetable versions with:
+   - Visual Highlighting of differences.
+   - **O(N) Conflict Detection** highlighting double-bookings or overlaps.
+5. **Manage Resources:** CRUD operations for Courses, Instructors, and Rooms (via API).
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 👥 Team Members
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- **Ammad Ahmed**
+- **Muhammad Hussain**
+- **Muhamamd Farhan**
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+<div align="center">
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Powered by Codevwil Studio
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+</div>

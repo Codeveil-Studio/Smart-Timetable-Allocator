@@ -1,0 +1,154 @@
+================================================================================
+SMART TIMETABLE ALLOCATOR - ALGORITHM & DATA STRUCTURES REFERENCE
+================================================================================
+
+This file documents the core C# algorithms and data structures used in the 
+TimetableService.cs to generate and validate university timetables.
+
+--------------------------------------------------------------------------------
+1. HASHSET USAGE (O(1) Lookups for Constraints)
+--------------------------------------------------------------------------------
+We use HashSet to track constraints efficiently. Specifically, `usedDays` ensures 
+that a course is not scheduled on the same day multiple times (unless necessary), 
+and implicit HashSets are used for quick existence checks.
+
+// FILE: backend/Services/TimetableService.cs
+
+// Tracking days used by a specific course to ensure distribution
+var usedDays = new HashSet<string>();
+
+// Checking if a day is already used (O(1) operation)
+if (usedDays.Contains(day)) continue; 
+
+// Marking a day as used after successful allocation
+usedDays.Add(day);
+
+--------------------------------------------------------------------------------
+2. GRAPH THEORY & BACKTRACKING (Implicit)
+--------------------------------------------------------------------------------
+The scheduling problem is modeled as a Constraint Satisfaction Problem (CSP), which 
+is equivalent to finding a valid coloring in a graph where:
+- Nodes = Course Sessions (Lectures/Labs)
+- Edges = Conflicts (Same Room, Same Instructor, Same Student Group)
+
+The `TryAllocateBlock` method implements a Greedy Heuristic with a "Sliding Window" 
+approach. While not a full recursive backtracking implementation (which would be 
+too slow for this scale), it "backtracks" locally by trying different days, then 
+different time windows, then different rooms until a valid slot is found or it fails.
+
+// FILE: backend/Services/TimetableService.cs
+
+private bool TryAllocateBlock(...)
+{
+    // ... setup code ...
+
+    // HEURISTIC: Sort days by "Load" to balance the schedule (Load Balancing)
+    // This distributes classes evenly across the week rather than bunching them up.
+    var dayLoads = days.ToDictionary(d => d, d => currentSessionTimetable.Count(...));
+    days = days.OrderBy(d => dayLoads[d]).ThenBy(x => random.Next()).ToArray();
+    
+    foreach (var day in days)
+    {
+        if (usedDays.Contains(day)) continue; // Constraint Check
+
+        // Get all time slots for the day
+        var daySlots = allSlots.Where(s => s.Day == day).OrderBy(s => s.StartTime).ToList();
+
+        // ALGORITHM: Sliding Window Technique
+        // We slide a window of size `blockSize` (e.g., 2 hours) over the available slots
+        for (int i = 0; i <= daySlots.Count - blockSize; i++)
+        {
+            var blockSlots = daySlots.Skip(i).Take(blockSize).ToList();
+
+            // Constraint: Continuity (Time slots must be consecutive)
+            bool isContinuous = true;
+            for(int k=0; k<blockSize-1; k++)
+            {
+                if(blockSlots[k].EndTime != blockSlots[k+1].StartTime)
+                {
+                    isContinuous = false; 
+                    break;
+                }
+            }
+            if (!isContinuous) continue;
+
+            // Nested Loop: Try every compatible room
+            foreach (var room in compatibleRooms)
+            {
+                bool roomFree = true;
+                
+                // Conflict Detection (Edge Checking in Graph terms)
+                foreach (var slot in blockSlots)
+                {
+                    // Check against Global State (Other Classes)
+                    if (globalTimetable.Any(t => 
+                        t.TimeSlotId == slot.Id && 
+                        (t.RoomId == room.Id || t.InstructorId == instructorId)))
+                    {
+                        roomFree = false;
+                        break;
+                    }
+                    
+                    // Check against Local State (Current Class being built)
+                    if (currentSessionTimetable.Any(t => 
+                        t.TimeSlotId == slot.Id && 
+                        (t.RoomId == room.Id || t.InstructorId == instructorId || t.AcademicClassId == classId)))
+                    {
+                        roomFree = false;
+                        break;
+                    }
+                }
+
+                if (roomFree)
+                {
+                    // Success! Assign slots and return true
+                    // This is the "Selection" step in our greedy approach
+                    foreach (var slot in blockSlots)
+                    {
+                        var entry = new Timetable { ... };
+                        currentSessionTimetable.Add(entry); 
+                    }
+                    return true;
+                }
+            }
+        }
+    }
+    return false; // Backtrack: Failed to allocate in any day/room
+}
+
+--------------------------------------------------------------------------------
+3. DICTIONARY (HASH MAP) FOR O(N) CONFLICT DETECTION
+--------------------------------------------------------------------------------
+In the "Compare Timetables" feature, we use Dictionaries to detect conflicts between 
+two timetables in O(N) time instead of O(N^2). This transforms the conflict check 
+from a nested loop comparison to a series of O(1) lookups.
+
+// FILE: backend/Services/TimetableService.cs (CompareTimetables method)
+
+// Create Lookup Maps for Timetable B (O(N))
+// Key format: "InstructorId|Day|TimeSlotId"
+var mapB_Instructor = listB.GroupBy(t => $"{t.InstructorId}|{GetTimeKey(t)}")
+                           .ToDictionary(g => g.Key, g => g.First());
+
+var mapB_Room = listB.GroupBy(t => $"{t.RoomId}|{GetTimeKey(t)}")
+                     .ToDictionary(g => g.Key, g => g.First());
+
+// Iterate Timetable A and check against Maps (O(N))
+foreach (var itemA in listA)
+{
+    string timeKey = GetTimeKey(itemA);
+    
+    // Check Instructor Conflict (O(1) lookup)
+    string keyInst = $"{itemA.InstructorId}|{timeKey}";
+    if (mapB_Instructor.TryGetValue(keyInst, out var conflictB))
+    {
+        conflicts.Add(new { ... });
+    }
+
+    // Check Room Conflict (O(1) lookup)
+    string keyRoom = $"{itemA.RoomId}|{timeKey}";
+    if (mapB_Room.TryGetValue(keyRoom, out var conflictB_Room))
+    {
+        conflicts.Add(new { ... });
+    }
+}
