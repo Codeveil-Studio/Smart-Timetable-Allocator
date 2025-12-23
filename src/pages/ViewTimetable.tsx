@@ -18,6 +18,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -219,6 +221,76 @@ const ViewTimetable = () => {
     return timetableData.find(t => t.day === day && t.startTime === startTime);
   };
 
+  const handleDownloadPDF = () => {
+    const doc = new jsPDF({
+      orientation: "landscape",
+    });
+
+    // Add Title
+    doc.setFontSize(20);
+    doc.text(`Timetable: ${selectedClass}`, 14, 20);
+    doc.setFontSize(12);
+    doc.text(`Version: ${selectedVersion}`, 14, 28);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 34);
+
+    // Prepare table data
+    // We want days as rows? Or slots as rows?
+    // The UI shows Days as rows (vertical axis) and Time Slots as columns (horizontal axis) in one view?
+    // Wait, the UI code shows:
+    // thead: Day, Slot 1, Slot 2...
+    // tbody: Day 1, Slot 1 Data, Slot 2 Data...
+    // Let's match the UI structure.
+
+    // Columns: "Day", then all displayTimeSlots
+    const tableHead = [["Day", ...displayTimeSlots]];
+
+    // Rows: Each Day
+    const tableBody = days.map(day => {
+      const rowData = [day];
+      timeSlots.forEach(slotTime => {
+        const entry = getEntry(day, slotTime);
+        if (entry) {
+          // Format cell content
+          // Course Name
+          // Room (Type)
+          // Instructor (if available, though not shown in getEntry return type but maybe in data?)
+          // The UI shows: Course, Room, RoomType.
+          let cellText = `${entry.course}\n${entry.room} (${entry.roomType || ""})`;
+          if (entry.isLab) cellText += " [LAB]";
+          rowData.push(cellText);
+        } else {
+          rowData.push("");
+        }
+      });
+      return rowData;
+    });
+
+    autoTable(doc, {
+      startY: 40,
+      head: tableHead,
+      body: tableBody,
+      theme: 'grid',
+      headStyles: { fillColor: [66, 66, 66] },
+      styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 25 }, // Day column
+        // distribute others
+      },
+      didParseCell: (data) => {
+        // Highlight Labs
+        if (data.section === 'body' && data.column.index > 0) {
+            const text = data.cell.raw as string;
+            if (text && text.includes("[LAB]")) {
+                data.cell.styles.fillColor = [255, 247, 237]; // Light orange
+                data.cell.styles.textColor = [154, 52, 18]; // Dark orange
+            }
+        }
+      }
+    });
+
+    doc.save(`Timetable_${selectedClass}_v${selectedVersion}.pdf`);
+  };
+
   // Handle auto-redirect from generation
   useEffect(() => {
     if (location.state?.className) {
@@ -377,7 +449,7 @@ const ViewTimetable = () => {
             </div>
             
             <div className="flex items-center gap-3 pr-8">
-              <Button variant="outline" size="sm" className="gap-2">
+              <Button variant="outline" size="sm" className="gap-2" onClick={handleDownloadPDF} disabled={timetableData.length === 0}>
                 <Download className="w-4 h-4" /> PDF
               </Button>
               <Button 
