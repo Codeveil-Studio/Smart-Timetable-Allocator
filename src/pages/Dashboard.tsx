@@ -1,7 +1,7 @@
 import { SummaryCard } from "@/components/dashboard/SummaryCard";
 import { ChartCard } from "@/components/dashboard/ChartCard";
 import { QuickStatsCard } from "@/components/dashboard/QuickStatsCard";
-import { BookOpen, Users, Home, Calendar, AlertCircle, Clock } from "lucide-react";
+import { BookOpen, Users, Home, Calendar, AlertCircle, Clock, Layers } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -10,28 +10,50 @@ const Dashboard = () => {
   const [courseCount, setCourseCount] = useState(0);
   const [instructorCount, setInstructorCount] = useState(0);
   const [roomCount, setRoomCount] = useState(0);
+  const [timetableStats, setTimetableStats] = useState({ totalTimetables: 0, totalVersions: 0, lastGenerated: null as string | null });
 
   useEffect(() => {
     (async () => {
       try {
-        const [coursesRes, instructorsRes, roomsRes] = await Promise.all([
+        const [coursesRes, instructorsRes, roomsRes, statsRes] = await Promise.all([
           fetch(`${API_BASE}/courses`),
           fetch(`${API_BASE}/instructors`),
           fetch(`${API_BASE}/rooms`),
+          fetch(`${API_BASE}/timetable/stats`),
         ]);
         const courses = await coursesRes.json();
         const instructors = await instructorsRes.json();
         const rooms = await roomsRes.json();
+        const stats = await statsRes.json();
+
         setCourseCount(Array.isArray(courses) ? courses.length : 0);
         setInstructorCount(Array.isArray(instructors) ? instructors.length : 0);
         setRoomCount(Array.isArray(rooms) ? rooms.length : 0);
+        setTimetableStats({
+          totalTimetables: stats.totalTimetables || 0,
+          totalVersions: stats.totalVersions || 0,
+          lastGenerated: stats.lastGenerated
+        });
       } catch {
         setCourseCount(0);
         setInstructorCount(0);
         setRoomCount(0);
+        setTimetableStats({ totalTimetables: 0, totalVersions: 0, lastGenerated: null });
       }
     })();
   }, []);
+
+  const formatTimeAgo = (dateString: string | null) => {
+    if (!dateString) return "Never";
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) return "Just now";
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} mins ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    return `${Math.floor(diffInSeconds / 86400)} days ago`;
+  };
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -73,21 +95,21 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <QuickStatsCard
             title="Generated Timetables"
-            value={156}
+            value={timetableStats.totalTimetables}
             icon={Calendar}
             color="text-primary"
           />
           <QuickStatsCard
-            title="Last Generated"
-            value="2 hours ago"
-            icon={Clock}
-            color="text-accent"
+            title="Total Versions"
+            value={timetableStats.totalVersions}
+            icon={Layers}
+            color="text-secondary"
           />
           <QuickStatsCard
-            title="Pending Conflicts"
-            value={3}
-            icon={AlertCircle}
-            color="text-destructive"
+            title="Last Generated"
+            value={formatTimeAgo(timetableStats.lastGenerated)}
+            icon={Clock}
+            color="text-accent"
           />
         </div>
       </div>

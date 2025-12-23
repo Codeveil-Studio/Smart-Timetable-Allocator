@@ -1,31 +1,54 @@
 import { Card } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { useEffect, useState } from "react";
 
-const data = [
-  { month: "Jan", generations: 12, conflicts: 3 },
-  { month: "Feb", generations: 19, conflicts: 5 },
-  { month: "Mar", generations: 15, conflicts: 2 },
-  { month: "Apr", generations: 25, conflicts: 4 },
-  { month: "May", generations: 22, conflicts: 1 },
-  { month: "Jun", generations: 30, conflicts: 6 },
-];
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 export const ChartCard = () => {
+  const [data, setData] = useState([
+    { day: "Mon", generations: 0, conflicts: 0 },
+    { day: "Tue", generations: 0, conflicts: 0 },
+    { day: "Wed", generations: 0, conflicts: 0 },
+    { day: "Thu", generations: 0, conflicts: 0 },
+    { day: "Fri", generations: 0, conflicts: 0 },
+    { day: "Sat", generations: 0, conflicts: 0 },
+    { day: "Sun", generations: 0, conflicts: 0 },
+  ]);
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/dashboard/analytics`);
+        if (res.ok) {
+          const analyticsData = await res.json();
+          if (Array.isArray(analyticsData) && analyticsData.length > 0) {
+            setData(analyticsData);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch analytics:", error);
+      }
+    };
+
+    fetchAnalytics();
+  }, []);
+
   return (
     <Card className="p-6 shadow-soft-md hover:shadow-soft-lg transition-all duration-300">
-      <h3 className="text-lg font-semibold text-foreground mb-4">Timetable Analytics</h3>
+      <h3 className="text-lg font-semibold text-foreground mb-4">Timetable Analytics (Last 7 Days)</h3>
       <div className="h-80">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis 
-              dataKey="month" 
+              dataKey="day" 
               stroke="hsl(var(--muted-foreground))"
               style={{ fontSize: '12px' }}
             />
             <YAxis 
               stroke="hsl(var(--muted-foreground))"
               style={{ fontSize: '12px' }}
+              allowDecimals={false}
             />
             <Tooltip 
               contentStyle={{

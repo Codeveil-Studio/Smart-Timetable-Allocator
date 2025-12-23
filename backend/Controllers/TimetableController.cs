@@ -50,6 +50,20 @@ namespace SmartScheduleBackend.Controllers
             }
         }
 
+        [HttpGet("stats")]
+        public async Task<IActionResult> GetStats()
+        {
+            try
+            {
+                var stats = await _service.GetDashboardStats();
+                return Ok(stats);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         [HttpGet("{className}")]
         public async Task<IActionResult> GetTimetable(string className, [FromQuery] int? version)
         {

@@ -493,6 +493,34 @@ namespace SmartScheduleBackend.Services
                          }).Cast<object>().ToList();
         }
 
+        public async Task<object> GetDashboardStats()
+        {
+            var totalTimetables = await _context.Timetables
+                .Select(t => t.AcademicClassId)
+                .Distinct()
+                .CountAsync();
+
+            var totalVersions = await _context.Timetables
+                .Select(t => new { t.AcademicClassId, t.Version })
+                .Distinct()
+                .CountAsync();
+
+            var lastGenerated = await _context.Timetables
+                .OrderByDescending(t => t.CreatedAt)
+                .Select(t => t.CreatedAt)
+                .FirstOrDefaultAsync();
+            
+            // Calculate time ago string roughly or return date
+            // Let's return the date object and handle formatting in frontend
+            
+            return new 
+            {
+                TotalTimetables = totalTimetables,
+                TotalVersions = totalVersions,
+                LastGenerated = lastGenerated
+            };
+        }
+
         public async Task<object> CompareTimetables(string classA, int verA, string classB, int verB)
         {
             // 1. Fetch Timetable A
